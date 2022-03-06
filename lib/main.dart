@@ -14,6 +14,12 @@ void main() async {
     overlays: [SystemUiOverlay.bottom],
   );
 
+  // disable screen rotation
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();
 
