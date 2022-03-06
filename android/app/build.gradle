@@ -41,12 +41,28 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+
+    packagingOptions {
+        pickFirst '**/*.so'
+    }
+
     defaultConfig {
         applicationId "com.app.sudokuai"
         minSdkVersion 21
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        externalNativeBuild {
+            cmake {
+                cppFlags '-frtti -fexceptions -Wall -Werror -std=c++17'
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
     }
 
     buildTypes {

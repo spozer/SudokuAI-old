@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'picture_view.dart';
 import 'dart:ui';
 
 class CameraViewController extends StatefulWidget {
@@ -113,6 +113,10 @@ class _CameraViewControllerState extends State<CameraViewController> {
         child: Stack(
           children: <Widget>[
             Align(
+              alignment: Alignment.center,
+              child: _takingPicture ? CircularProgressIndicator() : Container(),
+            ),
+            Align(
               alignment: Alignment.topLeft,
               child: _makeOverlayCorner(
                 lineLength,
@@ -211,22 +215,20 @@ class _CameraViewControllerState extends State<CameraViewController> {
             ),
             onPressed: _onToggleFlashButtonPressed,
           ),
-          _takingPicture
-              ? CircularProgressIndicator()
-              : Container(
-                  height: barHeight * 0.7,
-                  width: barHeight * 0.7,
-                  child: FloatingActionButton(
-                    heroTag: "TakePictureButton",
-                    foregroundColor: Colors.grey,
-                    backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.circle,
-                      size: barHeight * 0.65,
-                    ),
-                    onPressed: _onTakePictureButtonPressed,
-                  ),
-                ),
+          Container(
+            height: barHeight * 0.7,
+            width: barHeight * 0.7,
+            child: FloatingActionButton(
+              heroTag: "TakePictureButton",
+              foregroundColor: Colors.grey,
+              backgroundColor: Colors.white,
+              child: Icon(
+                Icons.circle,
+                size: barHeight * 0.65,
+              ),
+              onPressed: _onTakePictureButtonPressed,
+            ),
+          ),
           FloatingActionButton(
             heroTag: "GalleryButton",
             elevation: 0,
@@ -314,27 +316,6 @@ class _CameraViewControllerState extends State<CameraViewController> {
           // Pass the automatically generated path to
           // the DisplayPictureScreen widget.
           imagePath: imagePath,
-        ),
-      ),
-    );
-  }
-}
-
-// A widget that displays the picture taken by the user.
-class DisplayPictureScreen extends StatelessWidget {
-  final String imagePath;
-
-  const DisplayPictureScreen({Key? key, required this.imagePath}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Display the Picture')),
-      // The image is stored as a file on the device. Use the `Image.file`
-      // constructor with the given path to display the image.
-      body: Center(
-        child: Image.file(
-          File(imagePath),
         ),
       ),
     );

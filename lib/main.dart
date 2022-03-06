@@ -1,8 +1,7 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
-import 'camera_view_controller.dart';
+import 'view/camera_view.dart';
 
 void main() async {
   // Ensure that plugin services are initialized
@@ -31,7 +30,6 @@ void main() async {
   runApp(MaterialApp(
     theme: ThemeData(
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black,
       visualDensity: VisualDensity.adaptivePlatformDensity,
     ),
     home: CameraViewController(
