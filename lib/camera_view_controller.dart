@@ -109,6 +109,10 @@ class _CameraViewControllerState extends State<CameraViewController> {
   }
 
   Widget _getBottomBar() {
+    // bar height and width depending on screen dimensions
+    double height = MediaQuery.of(context).size.height * 0.15;
+    double width = MediaQuery.of(context).size.width * 0.9;
+
     return Padding(
       padding: EdgeInsets.only(bottom: 20),
       child: Align(
@@ -118,11 +122,11 @@ class _CameraViewControllerState extends State<CameraViewController> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
-              height: 150,
-              width: MediaQuery.of(context).size.width - 20,
+              height: height,
+              width: width,
               color: Colors.black.withOpacity(0.1),
               alignment: Alignment.center,
-              child: _getButtonRow(),
+              child: _getButtonRow(height, width),
             ),
           ),
         ),
@@ -130,7 +134,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
-  Widget _getButtonRow() {
+  Widget _getButtonRow(double barHeight, double barWidth) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
@@ -145,13 +149,13 @@ class _CameraViewControllerState extends State<CameraViewController> {
             onPressed: _onToggleFlashButtonPressed,
           ),
           Container(
-            height: 90,
-            width: 90,
+            height: barHeight * 0.7,
+            width: barHeight * 0.7,
             child: FloatingActionButton(
               heroTag: "TakePictureButton",
               foregroundColor: Colors.grey,
               backgroundColor: Colors.white,
-              child: Icon(Icons.circle, size: 80),
+              child: Icon(Icons.circle, size: barHeight * 0.65),
               onPressed: _onTakePictureButtonPressed,
             ),
           ),
