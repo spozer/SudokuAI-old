@@ -14,7 +14,7 @@ void main() async {
     overlays: [SystemUiOverlay.bottom],
   );
 
-  // disable screen rotation
+  // Disable screen rotation
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

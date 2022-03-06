@@ -49,18 +49,21 @@ class _CameraViewControllerState extends State<CameraViewController> {
 
   @override
   Widget build(BuildContext context) {
+    // get screen height and width
+    double screenHeight = MediaQuery.of(context).size.height;
+    double screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
       body: Stack(
-        // mainAxisAlignment: MainAxisAlignment.start,
         children: <Widget>[
-          _getCameraWidget(),
-          _getBottomBar(),
+          _getCameraWidget(screenHeight, screenWidth),
+          _getCameraOverlay(screenWidth * 0.85, screenHeight * 0.4),
+          _getBottomBar(screenHeight * 0.15, screenWidth * 0.9),
         ],
       ),
     );
   }
 
-  Widget _getCameraWidget() {
+  Widget _getCameraWidget(double height, double width) {
     // You must wait until the controller is initialized before displaying the
     // camera preview. Use a FutureBuilder to display a loading spinner until the
     // controller has finished initializing.
@@ -68,14 +71,10 @@ class _CameraViewControllerState extends State<CameraViewController> {
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          // get screen height and width
-          double height = MediaQuery.of(context).size.height;
-          double width = MediaQuery.of(context).size.width;
-
           double cameraAspectRatio = _controller.value.aspectRatio;
-          double screenAspectRatio = 1 / MediaQuery.of(context).size.aspectRatio;
+          double widgetAspectRatio = height / width;
 
-          bool fitHeight = (screenAspectRatio > cameraAspectRatio);
+          bool fitHeight = (widgetAspectRatio > cameraAspectRatio);
 
           return SizedBox(
             width: width,
@@ -102,13 +101,80 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
-  Widget _getBottomBar() {
-    // bar height and width depending on screen dimensions
-    double height = MediaQuery.of(context).size.height * 0.15;
-    double width = MediaQuery.of(context).size.width * 0.9;
+  Widget _getCameraOverlay(double size, double vPosition) {
+    final defaultLine = BorderSide(color: Colors.white, width: 3);
+    final lineLength = size * 0.1;
+    return Center(
+      heightFactor: 0.5,
+      child: Container(
+        margin: EdgeInsets.only(top: vPosition),
+        height: size,
+        width: size,
+        child: Stack(
+          children: <Widget>[
+            Align(
+              alignment: Alignment.topLeft,
+              child: _makeOverlayCorner(
+                lineLength,
+                top: defaultLine,
+                left: defaultLine,
+              ),
+            ),
+            Align(
+              alignment: Alignment.topRight,
+              child: _makeOverlayCorner(
+                lineLength,
+                top: defaultLine,
+                right: defaultLine,
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: _makeOverlayCorner(
+                lineLength,
+                bottom: defaultLine,
+                left: defaultLine,
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomRight,
+              child: _makeOverlayCorner(
+                lineLength,
+                bottom: defaultLine,
+                right: defaultLine,
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
 
+  Container _makeOverlayCorner(
+    double size, {
+    BorderSide top = BorderSide.none,
+    BorderSide bottom = BorderSide.none,
+    BorderSide left = BorderSide.none,
+    BorderSide right = BorderSide.none,
+  }) {
+    return Container(
+      height: size,
+      width: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.rectangle,
+        border: Border(
+          top: top,
+          bottom: bottom,
+          left: left,
+          right: right,
+        ),
+      ),
+    );
+  }
+
+  Widget _getBottomBar(double height, double width) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: height * 0.2),
       child: Align(
         alignment: Alignment.bottomCenter,
         child: ClipRRect(
