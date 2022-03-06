@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:ui';
 
 class CameraViewController extends StatefulWidget {
   const CameraViewController({
@@ -109,10 +110,22 @@ class _CameraViewControllerState extends State<CameraViewController> {
 
   Widget _getBottomBar() {
     return Padding(
-      padding: EdgeInsets.only(bottom: 48),
+      padding: EdgeInsets.only(bottom: 20),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: _getButtonRow(),
+        child: ClipRRect(
+          borderRadius: BorderRadius.all(Radius.circular(40)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              height: 150,
+              width: MediaQuery.of(context).size.width - 20,
+              color: Colors.black.withOpacity(0.1),
+              alignment: Alignment.center,
+              child: _getButtonRow(),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -132,13 +145,13 @@ class _CameraViewControllerState extends State<CameraViewController> {
             onPressed: _onToggleFlashButtonPressed,
           ),
           Container(
-            height: 80,
-            width: 80,
+            height: 90,
+            width: 90,
             child: FloatingActionButton(
               heroTag: "TakePictureButton",
               foregroundColor: Colors.grey,
               backgroundColor: Colors.white,
-              child: Icon(Icons.circle, size: 70),
+              child: Icon(Icons.circle, size: 80),
               onPressed: _onTakePictureButtonPressed,
             ),
           ),
