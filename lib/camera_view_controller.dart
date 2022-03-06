@@ -54,7 +54,6 @@ class _CameraViewControllerState extends State<CameraViewController> {
         // mainAxisAlignment: MainAxisAlignment.start,
         children: <Widget>[
           _getCameraWidget(),
-          // SizedBox(height: 15),
           _getBottomBar(),
         ],
       ),
@@ -89,12 +88,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
                   child: SizedBox(
                     width: fitHeight ? height / cameraAspectRatio : width,
                     height: fitHeight ? height : width * cameraAspectRatio,
-                    child: _takingPicture
-                        ? Stack(children: <Widget>[
-                            CameraPreview(_controller),
-                            Center(child: CircularProgressIndicator()),
-                          ])
-                        : CameraPreview(_controller),
+                    child: CameraPreview(_controller),
                   ),
                 ),
               ),
@@ -136,7 +130,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
 
   Widget _getButtonRow(double barHeight, double barWidth) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: EdgeInsets.symmetric(horizontal: barWidth * 0.07),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -145,26 +139,37 @@ class _CameraViewControllerState extends State<CameraViewController> {
             elevation: 0,
             foregroundColor: _isFlashOn ? Colors.yellow : Colors.white,
             backgroundColor: Colors.transparent,
-            child: Icon(_isFlashOn ? Icons.flash_on : Icons.flash_off, size: 35),
+            child: Icon(
+              _isFlashOn ? Icons.flash_on : Icons.flash_off,
+              size: barHeight * 0.32,
+            ),
             onPressed: _onToggleFlashButtonPressed,
           ),
-          Container(
-            height: barHeight * 0.7,
-            width: barHeight * 0.7,
-            child: FloatingActionButton(
-              heroTag: "TakePictureButton",
-              foregroundColor: Colors.grey,
-              backgroundColor: Colors.white,
-              child: Icon(Icons.circle, size: barHeight * 0.65),
-              onPressed: _onTakePictureButtonPressed,
-            ),
-          ),
+          _takingPicture
+              ? CircularProgressIndicator()
+              : Container(
+                  height: barHeight * 0.7,
+                  width: barHeight * 0.7,
+                  child: FloatingActionButton(
+                    heroTag: "TakePictureButton",
+                    foregroundColor: Colors.grey,
+                    backgroundColor: Colors.white,
+                    child: Icon(
+                      Icons.circle,
+                      size: barHeight * 0.65,
+                    ),
+                    onPressed: _onTakePictureButtonPressed,
+                  ),
+                ),
           FloatingActionButton(
             heroTag: "GalleryButton",
             elevation: 0,
             foregroundColor: Colors.white,
             backgroundColor: Colors.transparent,
-            child: Icon(Icons.image, size: 40),
+            child: Icon(
+              Icons.image,
+              size: barHeight * 0.4,
+            ),
             onPressed: _onGalleryButtonPressed,
           ),
         ],
@@ -172,12 +177,28 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
-  void _onToggleFlashButtonPressed() async {
-    _controller.setFlashMode(_isFlashOn ? FlashMode.off : FlashMode.torch);
+  void _turnFlashOff() {
+    if (!_isFlashOn) return;
+
+    _controller.setFlashMode(FlashMode.off);
 
     setState(() {
-      _isFlashOn = !_isFlashOn;
+      _isFlashOn = false;
     });
+  }
+
+  void _turnFlashOn() {
+    if (_isFlashOn) return;
+
+    _controller.setFlashMode(FlashMode.torch);
+
+    setState(() {
+      _isFlashOn = true;
+    });
+  }
+
+  void _onToggleFlashButtonPressed() async {
+    _isFlashOn ? _turnFlashOff() : _turnFlashOn();
   }
 
   void _onTakePictureButtonPressed() async {
@@ -193,12 +214,11 @@ class _CameraViewControllerState extends State<CameraViewController> {
       // where it was saved.
       final image = await _controller.takePicture();
 
-      // Turn off flash
-      _controller.setFlashMode(FlashMode.off);
+      // In case flash was turned on before
+      _turnFlashOff();
 
       setState(() {
         _takingPicture = false;
-        _isFlashOn = false;
       });
 
       // If the picture was taken, display it on a new screen.
@@ -210,6 +230,9 @@ class _CameraViewControllerState extends State<CameraViewController> {
   }
 
   void _onGalleryButtonPressed() async {
+    // In case flash was turned on before
+    _turnFlashOff();
+
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
 
