@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
+import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'view/camera_view.dart';
 
 void main() async {
   // Ensure that plugin services are initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Bridge
+  NativeSudokuScannerBridge.init();
 
   // Hide Status Bar
   SystemChrome.setEnabledSystemUIMode(

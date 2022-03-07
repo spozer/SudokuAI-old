@@ -19,6 +19,8 @@ class CameraViewController extends StatefulWidget {
 class _CameraViewControllerState extends State<CameraViewController> {
   late CameraController _controller;
   late Future<void> _initializeControllerFuture;
+  late double _roiOffset; // offset percentage from center to top
+  late Size _cropSize; // positioned at center of resulting picture
   bool _takingPicture = false;
   bool _isFlashOn = false;
 
@@ -31,7 +33,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
       // Get a specific camera from the list of available cameras.
       widget.camera,
       // Define the resolution to use.
-      ResolutionPreset.max,
+      ResolutionPreset.veryHigh,
       // Audio not needed
       enableAudio: false,
     );
@@ -52,12 +54,21 @@ class _CameraViewControllerState extends State<CameraViewController> {
     // get screen height and width
     double screenHeight = MediaQuery.of(context).size.height;
     double screenWidth = MediaQuery.of(context).size.width;
+
+    final bottomBarHeight = screenHeight * 0.15;
+    final bottomBarWidth = screenWidth * 0.9;
+    final bottomBarOffset = screenHeight * 0.03;
+    final overlaySize = screenWidth * 0.7;
+    final overlayOffset = bottomBarOffset + bottomBarHeight;
+
+    _roiOffset = overlayOffset / screenHeight; // 0.18;
+
     return Scaffold(
       body: Stack(
         children: <Widget>[
           _getCameraWidget(screenHeight, screenWidth),
-          _getCameraOverlay(screenWidth * 0.85, screenHeight * 0.4),
-          _getBottomBar(screenHeight * 0.15, screenWidth * 0.9),
+          _getCameraOverlay(overlaySize, overlayOffset),
+          _getBottomBar(bottomBarHeight, bottomBarWidth, bottomBarOffset),
         ],
       ),
     );
@@ -71,10 +82,17 @@ class _CameraViewControllerState extends State<CameraViewController> {
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          double cameraAspectRatio = _controller.value.aspectRatio;
+          final cameraSize = _controller.value.previewSize!;
+          // camera size is in landscape mode but we want aspect ratio from portrait mode
+          final cameraAspectRatio = cameraSize.width / cameraSize.height;
           double widgetAspectRatio = height / width;
 
           bool fitHeight = (widgetAspectRatio > cameraAspectRatio);
+
+          _cropSize = Size(
+            fitHeight ? cameraSize.width : cameraSize.height * widgetAspectRatio,
+            fitHeight ? cameraSize.width / widgetAspectRatio : cameraSize.height,
+          );
 
           return SizedBox(
             width: width,
@@ -105,9 +123,9 @@ class _CameraViewControllerState extends State<CameraViewController> {
     final defaultLine = BorderSide(color: Colors.white, width: 3);
     final lineLength = size * 0.1;
     return Center(
-      heightFactor: 0.5,
+      // heightFactor: 0.5,
       child: Container(
-        margin: EdgeInsets.only(top: vPosition),
+        margin: EdgeInsets.only(bottom: vPosition),
         height: size,
         width: size,
         child: Stack(
@@ -176,9 +194,9 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
-  Widget _getBottomBar(double height, double width) {
+  Widget _getBottomBar(double height, double width, double offset) {
     return Padding(
-      padding: EdgeInsets.only(bottom: height * 0.2),
+      padding: EdgeInsets.only(bottom: offset),
       child: Align(
         alignment: Alignment.bottomCenter,
         child: ClipRRect(

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sudokuai/sudoku_scanner.dart';
+import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'dart:io';
 
 // A widget that displays the picture taken by the user.
@@ -11,7 +11,7 @@ class DisplayPictureScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // run debug grid detection from sudoku scanner
-    SudokuScanner.debugGridDetection(imagePath);
+    NativeSudokuScannerBridge.debugGridDetection(imagePath);
 
     return Scaffold(
       appBar: AppBar(title: Text('Display the Picture')),

@@ -25,8 +25,12 @@ class NativeDetectionResult extends Struct {
   external Pointer<Coordinate> bottomLeft;
   external Pointer<Coordinate> bottomRight;
 
-  factory NativeDetectionResult.allocate(Pointer<Coordinate> topLeft, Pointer<Coordinate> topRight,
-          Pointer<Coordinate> bottomLeft, Pointer<Coordinate> bottomRight) =>
+  factory NativeDetectionResult.allocate(
+    Pointer<Coordinate> topLeft,
+    Pointer<Coordinate> topRight,
+    Pointer<Coordinate> bottomLeft,
+    Pointer<Coordinate> bottomRight,
+  ) =>
       malloc<NativeDetectionResult>().ref
         ..topLeft = topLeft
         ..topRight = topRight
@@ -112,14 +116,14 @@ typedef SetModelFunction = void Function(Pointer<Utf8> path);
 
 // https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
 
-class SudokuScanner {
+class NativeSudokuScannerBridge {
   static String tfliteModelPath = "";
 
   static void init() async {
     final extDir = await getExternalStorageDirectory();
     tfliteModelPath = extDir!.path + "/model.tflite";
     if (!await File(tfliteModelPath).exists()) {
-      var tfliteModel = await rootBundle.load('packages/sudokuai/assets/model.tflite');
+      var tfliteModel = await rootBundle.load('assets/model.tflite');
       File(tfliteModelPath).writeAsBytes(
         tfliteModel.buffer.asUint8List(
           tfliteModel.offsetInBytes,
