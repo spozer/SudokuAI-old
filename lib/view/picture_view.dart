@@ -11,7 +11,7 @@ class DisplayPictureScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // run debug grid detection from sudoku scanner
-    NativeSudokuScannerBridge.debugGridDetection(imagePath);
+    // NativeSudokuScannerBridge.debugGridDetection(imagePath);
 
     return Scaffold(
       appBar: AppBar(title: Text('Display the Picture')),

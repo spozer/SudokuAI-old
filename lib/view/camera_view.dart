@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'picture_view.dart';
 import 'dart:ui';
 
@@ -20,7 +21,8 @@ class _CameraViewControllerState extends State<CameraViewController> {
   late CameraController _controller;
   late Future<void> _initializeControllerFuture;
   late double _roiOffset; // offset percentage from center to top
-  late Size _cropSize; // positioned at center of resulting picture
+  late double _roiSize; // percentage based off of overlay size
+  late double _cameraWidgetAspectRatio; // positioned at center of resulting picture
   bool _takingPicture = false;
   bool _isFlashOn = false;
 
@@ -33,7 +35,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
       // Get a specific camera from the list of available cameras.
       widget.camera,
       // Define the resolution to use.
-      ResolutionPreset.veryHigh,
+      ResolutionPreset.max,
       // Audio not needed
       enableAudio: false,
     );
@@ -62,6 +64,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
     final overlayOffset = bottomBarOffset + bottomBarHeight;
 
     _roiOffset = overlayOffset / screenHeight; // 0.18;
+    _roiSize = (1.0 + (overlaySize / screenWidth)) / 2;
 
     return Scaffold(
       body: Stack(
@@ -89,10 +92,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
 
           bool fitHeight = (widgetAspectRatio > cameraAspectRatio);
 
-          _cropSize = Size(
-            fitHeight ? cameraSize.width : cameraSize.height * widgetAspectRatio,
-            fitHeight ? cameraSize.width / widgetAspectRatio : cameraSize.height,
-          );
+          _cameraWidgetAspectRatio = widgetAspectRatio;
 
           return SizedBox(
             width: width,
@@ -123,7 +123,6 @@ class _CameraViewControllerState extends State<CameraViewController> {
     final defaultLine = BorderSide(color: Colors.white, width: 3);
     final lineLength = size * 0.1;
     return Center(
-      // heightFactor: 0.5,
       child: Container(
         margin: EdgeInsets.only(bottom: vPosition),
         height: size,
@@ -328,6 +327,12 @@ class _CameraViewControllerState extends State<CameraViewController> {
   }
 
   void _showPicture(String imagePath) async {
+    NativeSudokuScannerBridge.detectGrid(
+      imagePath,
+      roiSize: _roiSize,
+      roiOffset: _roiOffset / 2,
+      aspectRatio: _cameraWidgetAspectRatio,
+    );
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => DisplayPictureScreen(

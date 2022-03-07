@@ -58,7 +58,12 @@ class GridDetectionResult {
 //   Array<Int32> array;
 // }
 
-typedef DetectGridFunction = Pointer<NativeDetectionResult> Function(Pointer<Utf8> imagePath);
+// ignore: camel_case_types
+typedef detect_grid_function = Pointer<NativeDetectionResult> Function(
+    Pointer<Utf8> imagePath, Double roiSize, Double roiOffset, Double aspectRatio);
+
+typedef DetectGridFunction = Pointer<NativeDetectionResult> Function(
+    Pointer<Utf8> imagePath, double roiSize, double roiOffset, double aspectRatio);
 
 // ignore: camel_case_types
 typedef extract_grid_function = Pointer<Int32> Function(
@@ -134,13 +139,15 @@ class NativeSudokuScannerBridge {
     _setModel(tfliteModelPath);
   }
 
-  static Future<GridDetectionResult> detectGrid(String path) async {
-    DynamicLibrary nativeEdgeDetection = _getDynamicLibrary();
+  static Future<GridDetectionResult> detectGrid(String path,
+      {double roiSize = 0.0, double roiOffset = 0.0, double aspectRatio = 0.0}) async {
+    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
 
-    final detectEdges =
-        nativeEdgeDetection.lookup<NativeFunction<DetectGridFunction>>("detect_grid").asFunction<DetectGridFunction>();
+    final detectGrid = nativeSudokuScanner
+        .lookup<NativeFunction<detect_grid_function>>("detect_grid")
+        .asFunction<DetectGridFunction>();
 
-    NativeDetectionResult detectionResult = detectEdges(path.toNativeUtf8()).ref;
+    NativeDetectionResult detectionResult = detectGrid(path.toNativeUtf8(), roiSize, roiOffset, aspectRatio).ref;
 
     return GridDetectionResult(
         topLeft: Offset(detectionResult.topLeft.ref.x, detectionResult.topLeft.ref.y),
@@ -150,9 +157,9 @@ class NativeSudokuScannerBridge {
   }
 
   static Future<List<int>> extractGrid(String path, GridDetectionResult result) async {
-    DynamicLibrary nativeEdgeDetection = _getDynamicLibrary();
+    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
 
-    final extractGrid = nativeEdgeDetection
+    final extractGrid = nativeSudokuScanner
         .lookup<NativeFunction<extract_grid_function>>("extract_grid")
         .asFunction<ExtractGridFunction>();
 
@@ -177,10 +184,10 @@ class NativeSudokuScannerBridge {
   }
 
   static Future<bool> debugGridDetection(String path) async {
-    DynamicLibrary nativeEdgeDetection = _getDynamicLibrary();
+    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
 
     final debugGridDetection =
-        nativeEdgeDetection.lookup<NativeFunction<debug_function>>("debug_grid_detection").asFunction<DebugFunction>();
+        nativeSudokuScanner.lookup<NativeFunction<debug_function>>("debug_grid_detection").asFunction<DebugFunction>();
 
     int debugImage = debugGridDetection(path.toNativeUtf8());
 
@@ -188,9 +195,9 @@ class NativeSudokuScannerBridge {
   }
 
   static Future<bool> debugGridExtraction(String path, GridDetectionResult result) async {
-    DynamicLibrary nativeEdgeDetection = _getDynamicLibrary();
+    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
 
-    final debugGridExtraction = nativeEdgeDetection
+    final debugGridExtraction = nativeSudokuScanner
         .lookup<NativeFunction<debug_grid_extraction_function>>("debug_grid_extraction")
         .asFunction<DebugGridExtractionFunction>();
 
@@ -201,17 +208,17 @@ class NativeSudokuScannerBridge {
   }
 
   static void _setModel(String path) async {
-    DynamicLibrary nativeEdgeDetection = _getDynamicLibrary();
+    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
 
     final setModel =
-        nativeEdgeDetection.lookup<NativeFunction<set_model_function>>("set_model").asFunction<SetModelFunction>();
+        nativeSudokuScanner.lookup<NativeFunction<set_model_function>>("set_model").asFunction<SetModelFunction>();
 
     setModel(path.toNativeUtf8());
   }
 
   static DynamicLibrary _getDynamicLibrary() {
-    final DynamicLibrary nativeEdgeDetection =
+    final DynamicLibrary nativeSudokuScanner =
         Platform.isAndroid ? DynamicLibrary.open("libnative_sudoku_scanner.so") : DynamicLibrary.process();
-    return nativeEdgeDetection;
+    return nativeSudokuScanner;
   }
 }

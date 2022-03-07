@@ -15,7 +15,7 @@ extern "C" struct ProcessingInput {
     DetectionResult detectionResult;
 };
 
-extern "C" struct DetectionResult *detect_grid(char *path);
+extern "C" struct DetectionResult *detect_grid(char *path, double roiSize = 0.0, double roiOffset = 0.0, double aspectRatio = 0.0);
 
 extern "C" int *extract_grid(
     char *path,

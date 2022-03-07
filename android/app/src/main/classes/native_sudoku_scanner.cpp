@@ -21,7 +21,7 @@ extern "C" __attribute__((visibility("default"))) __attribute__((used)) struct D
     return detectionResult;
 }
 
-extern "C" __attribute__((visibility("default"))) __attribute__((used)) struct DetectionResult *detect_grid(char *path) {
+extern "C" __attribute__((visibility("default"))) __attribute__((used)) struct DetectionResult *detect_grid(char *path, double roiSize, double roiOffset, double aspectRatio) {
     // struct DetectionResult *coordinate = (struct DetectionResult *)malloc(sizeof(struct DetectionResult));
     cv::Mat mat = cv::imread(path);
 
@@ -31,6 +31,30 @@ extern "C" __attribute__((visibility("default"))) __attribute__((used)) struct D
             create_coordinate(1, 0),
             create_coordinate(0, 1),
             create_coordinate(1, 1));
+    }
+
+    // crop image so it only contains ROI
+    if (roiSize > 0 && roiOffset > 0 && aspectRatio > 0) {
+
+        // fit height or width depending on given aspect ratio
+        bool fit_height = (aspectRatio > mat.size().height / mat.size().width);
+
+        // first get resulting dimensions for given aspect ratio
+        double height = fit_height ? mat.size().height : mat.size().width * aspectRatio;
+        double width = fit_height ? mat.size().height / aspectRatio : mat.size().width;
+
+        // define size and place of ROI in pixels
+        double roi_size = roiSize * width; // roiSize is given as a percentage
+        double roi_offset = roiOffset * height; // roiOffset is given as a percentage
+
+        // calculate start and end points of ROI and stay in bounderies of image
+        int x_start = cv::max((mat.size().width / 2) - (roi_size / 2), 0.0);
+        int x_end = cv::min(x_start + roi_size, mat.size().width - 1.0);
+        int y_start = cv::max((mat.size().height / 2) - (roi_size / 2) - roi_offset, 0.0);
+        int y_end = cv::min(y_start + roi_size, mat.size().height - 1.0);
+
+        mat = mat(cv::Range(y_start, y_end), cv::Range(x_start, x_end));
+        cv::imwrite(path, mat);
     }
 
     std::vector<cv::Point> points = GridDetector::detect_grid(mat);
