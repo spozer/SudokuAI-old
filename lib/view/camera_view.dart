@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
+import 'package:sudokuai/view/sudoku_view.dart';
 import 'picture_view.dart';
+import 'sudoku_view.dart';
 import 'dart:ui';
 
 class CameraViewController extends StatefulWidget {
@@ -320,8 +322,8 @@ class _CameraViewControllerState extends State<CameraViewController> {
         _takingPicture = false;
       });
 
-      // If the picture was taken, display it on a new screen.
-      _showPicture(image.path);
+      // If the picture was taken, extract Sudoku and display it.
+      _showSudokuGrid(image.path);
     } catch (e) {
       // If an error occurs, log the error to the console.
       print(e);
@@ -341,18 +343,44 @@ class _CameraViewControllerState extends State<CameraViewController> {
   }
 
   void _showPicture(String imagePath) async {
-    NativeSudokuScannerBridge.detectGrid(
+    final sudokuGrid = await NativeSudokuScannerBridge.extractGridfromRoi(
       imagePath,
-      roiSize: _roiSize,
-      roiOffset: _roiOffset / 2,
-      aspectRatio: _cameraWidgetAspectRatio,
+      _roiSize,
+      _roiOffset / 2,
+      _cameraWidgetAspectRatio,
     );
+
+    // final test = await NativeSudokuScannerBridge.detectGrid(imagePath);
+    // NativeSudokuScannerBridge.debugGridExtraction(imagePath, test);
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => DisplayPictureScreen(
           // Pass the automatically generated path to
           // the DisplayPictureScreen widget.
           imagePath: imagePath,
+        ),
+      ),
+    );
+  }
+
+  void _showSudokuGrid(String imagePath) async {
+    final sudokuGrid = await NativeSudokuScannerBridge.extractGridfromRoi(
+      imagePath,
+      _roiSize,
+      _roiOffset / 2,
+      _cameraWidgetAspectRatio,
+    );
+
+    // final test = await NativeSudokuScannerBridge.detectGrid(imagePath);
+    // NativeSudokuScannerBridge.debugGridExtraction(imagePath, test);
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SudokuView(
+          // Pass the automatically generated path to
+          // the DisplayPictureScreen widget.
+          sudokuGrid: sudokuGrid,
         ),
       ),
     );

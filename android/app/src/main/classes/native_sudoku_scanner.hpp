@@ -15,7 +15,7 @@ extern "C" struct ProcessingInput {
     DetectionResult detectionResult;
 };
 
-extern "C" struct DetectionResult *detect_grid(char *path, double roiSize = 0.0, double roiOffset = 0.0, double aspectRatio = 0.0);
+extern "C" struct DetectionResult *detect_grid(char *path);
 
 extern "C" int *extract_grid(
     char *path,
@@ -27,6 +27,12 @@ extern "C" int *extract_grid(
     double bottomLeftY,
     double bottomRightX,
     double bottomRightY);
+
+extern "C" int *extract_grid_from_roi(
+    char *path,
+    double roiSize,
+    double roiOffset,
+    double aspectRatio);
 
 extern "C" bool debug_grid_detection(char *path);
 

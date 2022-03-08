@@ -3,6 +3,7 @@ import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'dart:io';
 
 // A widget that displays the picture taken by the user.
+// TODO: rename
 class DisplayPictureScreen extends StatelessWidget {
   final String imagePath;
 

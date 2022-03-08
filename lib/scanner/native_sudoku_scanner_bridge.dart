@@ -59,34 +59,49 @@ class GridDetectionResult {
 // }
 
 // ignore: camel_case_types
-typedef detect_grid_function = Pointer<NativeDetectionResult> Function(
-    Pointer<Utf8> imagePath, Double roiSize, Double roiOffset, Double aspectRatio);
+typedef detect_grid_function = Pointer<NativeDetectionResult> Function(Pointer<Utf8> imagePath);
 
-typedef DetectGridFunction = Pointer<NativeDetectionResult> Function(
-    Pointer<Utf8> imagePath, double roiSize, double roiOffset, double aspectRatio);
+typedef DetectGridFunction = Pointer<NativeDetectionResult> Function(Pointer<Utf8> imagePath);
 
 // ignore: camel_case_types
 typedef extract_grid_function = Pointer<Int32> Function(
-    Pointer<Utf8> imagePath,
-    Double topLeftX,
-    Double topLeftY,
-    Double topRightX,
-    Double topRightY,
-    Double bottomLeftX,
-    Double bottomLeftY,
-    Double bottomRightX,
-    Double bottomRightY);
+  Pointer<Utf8> imagePath,
+  Double topLeftX,
+  Double topLeftY,
+  Double topRightX,
+  Double topRightY,
+  Double bottomLeftX,
+  Double bottomLeftY,
+  Double bottomRightX,
+  Double bottomRightY,
+);
 
 typedef ExtractGridFunction = Pointer<Int32> Function(
-    Pointer<Utf8> imagePath,
-    double topLeftX,
-    double topLeftY,
-    double topRightX,
-    double topRightY,
-    double bottomLeftX,
-    double bottomLeftY,
-    double bottomRightX,
-    double bottomRightY);
+  Pointer<Utf8> imagePath,
+  double topLeftX,
+  double topLeftY,
+  double topRightX,
+  double topRightY,
+  double bottomLeftX,
+  double bottomLeftY,
+  double bottomRightX,
+  double bottomRightY,
+);
+
+// ignore: camel_case_types
+typedef extract_grid_from_roi_function = Pointer<Int32> Function(
+  Pointer<Utf8> imagePath,
+  Double roiSize,
+  Double roiOffset,
+  Double aspectRatio,
+);
+
+typedef ExtractGridFromRoiFunction = Pointer<Int32> Function(
+  Pointer<Utf8> imagePath,
+  double roiSize,
+  double roiOffset,
+  double aspectRatio,
+);
 
 // ignore: camel_case_types
 typedef debug_grid_extraction_function = Int8 Function(
@@ -139,15 +154,14 @@ class NativeSudokuScannerBridge {
     _setModel(tfliteModelPath);
   }
 
-  static Future<GridDetectionResult> detectGrid(String path,
-      {double roiSize = 0.0, double roiOffset = 0.0, double aspectRatio = 0.0}) async {
+  static Future<GridDetectionResult> detectGrid(String path) async {
     DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
 
     final detectGrid = nativeSudokuScanner
         .lookup<NativeFunction<detect_grid_function>>("detect_grid")
         .asFunction<DetectGridFunction>();
 
-    NativeDetectionResult detectionResult = detectGrid(path.toNativeUtf8(), roiSize, roiOffset, aspectRatio).ref;
+    NativeDetectionResult detectionResult = detectGrid(path.toNativeUtf8()).ref;
 
     return GridDetectionResult(
         topLeft: Offset(detectionResult.topLeft.ref.x, detectionResult.topLeft.ref.y),
@@ -173,6 +187,24 @@ class NativeSudokuScannerBridge {
         result.bottomLeft.dy,
         result.bottomRight.dx,
         result.bottomRight.dy);
+
+    List<int> gridList = gridArray.asTypedList(81);
+
+    gridList.forEach((elem) {
+      if (elem != 0) print("array: $elem");
+    });
+
+    return gridList;
+  }
+
+  static Future<List<int>> extractGridfromRoi(String path, double roiSize, double roiOffset, double aspectRatio) async {
+    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
+
+    final extractGridfromRoi = nativeSudokuScanner
+        .lookup<NativeFunction<extract_grid_from_roi_function>>("extract_grid_from_roi")
+        .asFunction<ExtractGridFromRoiFunction>();
+
+    Pointer<Int32> gridArray = extractGridfromRoi(path.toNativeUtf8(), roiSize, roiOffset, aspectRatio);
 
     List<int> gridList = gridArray.asTypedList(81);
 
