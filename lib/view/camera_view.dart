@@ -25,6 +25,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
   late double _cameraWidgetAspectRatio; // positioned at center of resulting picture
   bool _takingPicture = false;
   bool _isFlashOn = false;
+  bool _wasInitializing = true;
 
   @override
   void initState() {
@@ -85,6 +86,13 @@ class _CameraViewControllerState extends State<CameraViewController> {
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
+          // flash mode is set to auto as default so turn it off right
+          // after camera is done initializing for the first time
+          if (_wasInitializing) {
+            _controller.setFlashMode(FlashMode.off);
+            _wasInitializing = false;
+          }
+
           final cameraSize = _controller.value.previewSize!;
           // camera size is in landscape mode but we want aspect ratio from portrait mode
           final cameraAspectRatio = cameraSize.width / cameraSize.height;
@@ -232,7 +240,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
             ),
             onPressed: _onToggleFlashButtonPressed,
           ),
-          Container(
+          SizedBox(
             height: barHeight * 0.7,
             width: barHeight * 0.7,
             child: FloatingActionButton(
@@ -262,8 +270,11 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
-  void _turnFlashOff() {
+  void _turnFlashOff() async {
     if (!_isFlashOn) return;
+
+    // Ensure that the camera is initialized.
+    await _initializeControllerFuture;
 
     _controller.setFlashMode(FlashMode.off);
 
@@ -272,8 +283,11 @@ class _CameraViewControllerState extends State<CameraViewController> {
     });
   }
 
-  void _turnFlashOn() {
+  void _turnFlashOn() async {
     if (_isFlashOn) return;
+
+    // Ensure that the camera is initialized.
+    await _initializeControllerFuture;
 
     _controller.setFlashMode(FlashMode.torch);
 
