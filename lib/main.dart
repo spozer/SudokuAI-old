@@ -36,7 +36,7 @@ void main() async {
       brightness: Brightness.dark,
       visualDensity: VisualDensity.adaptivePlatformDensity,
     ),
-    home: CameraViewController(
+    home: CameraView(
       camera: firstCamera,
     ),
   ));

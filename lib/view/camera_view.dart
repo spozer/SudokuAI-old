@@ -7,8 +7,9 @@ import 'picture_view.dart';
 import 'sudoku_view.dart';
 import 'dart:ui';
 
-class CameraViewController extends StatefulWidget {
-  const CameraViewController({
+/// The main widget for taking pictures.
+class CameraView extends StatefulWidget {
+  const CameraView({
     Key? key,
     required this.camera,
   }) : super(key: key);
@@ -16,15 +17,20 @@ class CameraViewController extends StatefulWidget {
   final CameraDescription camera;
 
   @override
-  _CameraViewControllerState createState() => _CameraViewControllerState();
+  _CameraViewState createState() => _CameraViewState();
 }
 
-class _CameraViewControllerState extends State<CameraViewController> {
+class _CameraViewState extends State<CameraView> {
   late CameraController _controller;
   late Future<void> _initializeControllerFuture;
-  late double _roiOffset; // offset percentage from center to top
-  late double _roiSize; // percentage based off of overlay size
-  late double _cameraWidgetAspectRatio; // positioned at center of resulting picture
+  // Offset percentage from center to top.
+  late double _roiOffset;
+  // Percentage, based off of overlay size.
+  late double _roiSize;
+  // Positioned at center of resulting picture.
+  late double _cameraWidgetAspectRatio;
+
+  // Various states.
   bool _takingPicture = false;
   bool _isFlashOn = false;
   bool _wasInitializing = true;
@@ -56,19 +62,25 @@ class _CameraViewControllerState extends State<CameraViewController> {
 
   @override
   Widget build(BuildContext context) {
-    // get screen height and width
+    // Get screen height and width.
     double screenHeight = MediaQuery.of(context).size.height;
     double screenWidth = MediaQuery.of(context).size.width;
 
+    // Define widget sizes which are scaled by the screen size.
     final bottomBarHeight = screenHeight * 0.15;
     final bottomBarWidth = screenWidth * 0.9;
     final bottomBarOffset = screenHeight * 0.03;
     final overlaySize = screenWidth * 0.7;
     final overlayOffset = bottomBarOffset + bottomBarHeight;
 
+    // Define Region Of Interest (ROI). The user should try
+    // to place the Sudoku grid inside this region.
     _roiOffset = overlayOffset / screenHeight; // 0.18;
     _roiSize = (1.0 + (overlaySize / screenWidth)) / 2;
 
+    // Main widget existing of the camera preview, the ROI indicator overlay,
+    // the buttons for taking a picture, loading a picture from device storage,
+    // and a button detecated for turining flash on/off.
     return Scaffold(
       body: Stack(
         children: <Widget>[
@@ -80,6 +92,15 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
+  /// A widget to show the camera preview.
+  ///
+  /// The goal is to fit the camera preview to the size of the widget.
+  /// To fill out the whole widget - we don't want any black bars - we need
+  /// to crop the preview first. Depending on the aspect ratio of
+  /// the widget [widgetAspectRatio] and the camera [cameraAspectRatio],
+  /// the preview gets fitted eighter to its height or its width.
+  /// When fitting to its height we lose some pixels on both sides left/right.
+  /// When fitting to its width we lose some pixels at the top and de botttom.
   Widget _getCameraWidget(double height, double width) {
     // You must wait until the controller is initialized before displaying the
     // camera preview. Use a FutureBuilder to display a loading spinner until the
@@ -88,20 +109,24 @@ class _CameraViewControllerState extends State<CameraViewController> {
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          // flash mode is set to auto as default so turn it off right
-          // after camera is done initializing for the first time
+          // Flash mode is set to auto as default so turn it off right
+          // after camera is done initializing for the first time.
           if (_wasInitializing) {
             _controller.setFlashMode(FlashMode.off);
             _wasInitializing = false;
           }
 
           final cameraSize = _controller.value.previewSize!;
-          // camera size is in landscape mode but we want aspect ratio from portrait mode
+          // Camera size is in landscape mode but we want aspect ratio from
+          // portrait mode.
           final cameraAspectRatio = cameraSize.width / cameraSize.height;
           double widgetAspectRatio = height / width;
 
+          // Whether we have to fit the camera preview to its height
+          // or its width.
           bool fitHeight = (widgetAspectRatio > cameraAspectRatio);
 
+          // save camera aspect ratio for late use case.
           _cameraWidgetAspectRatio = widgetAspectRatio;
 
           return SizedBox(
@@ -129,8 +154,13 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
+  /// A widget indicating the ROI as an overlay.
+  ///
+  /// The overlay exists of four corners pieces of a square.
   Widget _getCameraOverlay(double size, double vPosition) {
+    // Color and thickness of the overlay.
     final defaultLine = BorderSide(color: Colors.white, width: 3);
+    // Size of a corner piece.
     final lineLength = size * 0.1;
     return Center(
       child: Container(
@@ -141,6 +171,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
           children: <Widget>[
             Align(
               alignment: Alignment.center,
+              // Display loading indicator while taking a picture.
               child: _takingPicture ? CircularProgressIndicator() : Container(),
             ),
             Align(
@@ -181,6 +212,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
+  /// Helper function which creates corner pieces for the overlay widget.
   Container _makeOverlayCorner(
     double size, {
     BorderSide top = BorderSide.none,
@@ -203,6 +235,12 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
+  /// A widget defining the bottom bar.
+  ///
+  /// The bottom bar exists of three buttons (from left to right):
+  ///  * A button for toggling the flash on/off.
+  ///  * A button for taking a picture.
+  ///  * A button to load an image from the devices storage.
   Widget _getBottomBar(double height, double width, double offset) {
     return Padding(
       padding: EdgeInsets.only(bottom: offset),
@@ -225,6 +263,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
+  /// Helper function creating the buttons for the buttom bar widget.
   Widget _getButtonRow(double barHeight, double barWidth) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: barWidth * 0.07),
@@ -298,10 +337,12 @@ class _CameraViewControllerState extends State<CameraViewController> {
     });
   }
 
+  /// Callback function for handling ToggleFlashButton pressed events.
   void _onToggleFlashButtonPressed() async {
     _isFlashOn ? _turnFlashOff() : _turnFlashOn();
   }
 
+  /// Callback function for handling TakePictureButton pressed events.
   void _onTakePictureButtonPressed() async {
     try {
       setState(() {
@@ -337,6 +378,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
     }
   }
 
+  /// Callback function for handling GalleryButton pressed events.
   void _onGalleryButtonPressed() async {
     // In case flash was turned on before
     _turnFlashOff();
@@ -354,15 +396,16 @@ class _CameraViewControllerState extends State<CameraViewController> {
   void _showPicture(String imagePath) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => DisplayPictureScreen(
+        builder: (context) => PictureView(
           // Pass the automatically generated path to
-          // the DisplayPictureScreen widget.
+          // the PictureView widget.
           imagePath: imagePath,
         ),
       ),
     );
   }
 
+  /// Present next view.
   void _showSudokuGrid(Future<List<int>> sudokuFuture) async {
     final sudokuGrid = await sudokuFuture;
 
@@ -370,7 +413,7 @@ class _CameraViewControllerState extends State<CameraViewController> {
       MaterialPageRoute(
         builder: (context) => SudokuView(
           // Pass the automatically generated path to
-          // the DisplayPictureScreen widget.
+          // the SudokuGrid widget.
           sudokuGrid: sudokuGrid,
         ),
       ),
