@@ -323,7 +323,14 @@ class _CameraViewControllerState extends State<CameraViewController> {
       });
 
       // If the picture was taken, extract Sudoku and display it.
-      _showSudokuGrid(image.path);
+      final sudokuFuture = NativeSudokuScannerBridge.extractGridfromRoi(
+        image.path,
+        _roiSize,
+        _roiOffset / 2,
+        _cameraWidgetAspectRatio,
+      );
+
+      _showSudokuGrid(sudokuFuture);
     } catch (e) {
       // If an error occurs, log the error to the console.
       print(e);
@@ -338,21 +345,13 @@ class _CameraViewControllerState extends State<CameraViewController> {
     final image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      _showPicture(image.path);
+      final resultBB = await NativeSudokuScannerBridge.detectGrid(image.path);
+      final sudokuFuter = NativeSudokuScannerBridge.extractGrid(image.path, resultBB);
+      _showSudokuGrid(sudokuFuter);
     }
   }
 
   void _showPicture(String imagePath) async {
-    final sudokuGrid = await NativeSudokuScannerBridge.extractGridfromRoi(
-      imagePath,
-      _roiSize,
-      _roiOffset / 2,
-      _cameraWidgetAspectRatio,
-    );
-
-    // final test = await NativeSudokuScannerBridge.detectGrid(imagePath);
-    // NativeSudokuScannerBridge.debugGridExtraction(imagePath, test);
-
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => DisplayPictureScreen(
@@ -364,16 +363,8 @@ class _CameraViewControllerState extends State<CameraViewController> {
     );
   }
 
-  void _showSudokuGrid(String imagePath) async {
-    final sudokuGrid = await NativeSudokuScannerBridge.extractGridfromRoi(
-      imagePath,
-      _roiSize,
-      _roiOffset / 2,
-      _cameraWidgetAspectRatio,
-    );
-
-    // final test = await NativeSudokuScannerBridge.detectGrid(imagePath);
-    // NativeSudokuScannerBridge.debugGridExtraction(imagePath, test);
+  void _showSudokuGrid(Future<List<int>> sudokuFuture) async {
+    final sudokuGrid = await sudokuFuture;
 
     await Navigator.of(context).push(
       MaterialPageRoute(
