@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:ui';
 import 'package:ffi/ffi.dart';
-import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -13,43 +11,13 @@ class Coordinate extends Struct {
 
   @Double()
   external double y;
-
-  factory Coordinate.allocate(double x, double y) => malloc<Coordinate>().ref
-    ..x = x
-    ..y = y;
 }
 
-class NativeDetectionResult extends Struct {
-  external Pointer<Coordinate> topLeft;
-  external Pointer<Coordinate> topRight;
-  external Pointer<Coordinate> bottomLeft;
-  external Pointer<Coordinate> bottomRight;
-
-  factory NativeDetectionResult.allocate(
-    Pointer<Coordinate> topLeft,
-    Pointer<Coordinate> topRight,
-    Pointer<Coordinate> bottomLeft,
-    Pointer<Coordinate> bottomRight,
-  ) =>
-      malloc<NativeDetectionResult>().ref
-        ..topLeft = topLeft
-        ..topRight = topRight
-        ..bottomLeft = bottomLeft
-        ..bottomRight = bottomRight;
-}
-
-class GridDetectionResult {
-  Offset topLeft;
-  Offset topRight;
-  Offset bottomLeft;
-  Offset bottomRight;
-
-  GridDetectionResult({
-    required this.topLeft,
-    required this.topRight,
-    required this.bottomLeft,
-    required this.bottomRight,
-  });
+class DetectionResult extends Struct {
+  external Coordinate topLeft;
+  external Coordinate topRight;
+  external Coordinate bottomLeft;
+  external Coordinate bottomRight;
 }
 
 // asTypedList for Array Type will be available eventually (see https://github.com/dart-lang/sdk/issues/45508)
@@ -59,33 +27,19 @@ class GridDetectionResult {
 // }
 
 // ignore: camel_case_types
-typedef detect_grid_function = Pointer<NativeDetectionResult> Function(Pointer<Utf8> imagePath);
+typedef detect_grid_function = DetectionResult Function(Pointer<Utf8> imagePath);
 
-typedef DetectGridFunction = Pointer<NativeDetectionResult> Function(Pointer<Utf8> imagePath);
+typedef DetectGridFunction = DetectionResult Function(Pointer<Utf8> imagePath);
 
 // ignore: camel_case_types
 typedef extract_grid_function = Pointer<Int32> Function(
   Pointer<Utf8> imagePath,
-  Double topLeftX,
-  Double topLeftY,
-  Double topRightX,
-  Double topRightY,
-  Double bottomLeftX,
-  Double bottomLeftY,
-  Double bottomRightX,
-  Double bottomRightY,
+  DetectionResult detectionResult,
 );
 
 typedef ExtractGridFunction = Pointer<Int32> Function(
   Pointer<Utf8> imagePath,
-  double topLeftX,
-  double topLeftY,
-  double topRightX,
-  double topRightY,
-  double bottomLeftX,
-  double bottomLeftY,
-  double bottomRightX,
-  double bottomRightY,
+  DetectionResult detectionResult,
 );
 
 // ignore: camel_case_types
@@ -105,26 +59,14 @@ typedef ExtractGridFromRoiFunction = Pointer<Int32> Function(
 
 // ignore: camel_case_types
 typedef debug_grid_extraction_function = Int8 Function(
-    Pointer<Utf8> imagePath,
-    Double topLeftX,
-    Double topLeftY,
-    Double topRightX,
-    Double topRightY,
-    Double bottomLeftX,
-    Double bottomLeftY,
-    Double bottomRightX,
-    Double bottomRightY);
+  Pointer<Utf8> imagePath,
+  DetectionResult detectionResult,
+);
 
 typedef DebugGridExtractionFunction = int Function(
-    Pointer<Utf8> imagePath,
-    double topLeftX,
-    double topLeftY,
-    double topRightX,
-    double topRightY,
-    double bottomLeftX,
-    double bottomLeftY,
-    double bottomRightX,
-    double bottomRightY);
+  Pointer<Utf8> imagePath,
+  DetectionResult detectionResult,
+);
 
 // ignore: camel_case_types
 typedef debug_function = Int8 Function(Pointer<Utf8> imagePath);
@@ -134,62 +76,65 @@ typedef DebugFunction = int Function(Pointer<Utf8> imagePath);
 typedef set_model_function = Void Function(Pointer<Utf8> path);
 typedef SetModelFunction = void Function(Pointer<Utf8> path);
 
+// ignore: camel_case_types
+typedef free_pointer_function = Void Function(Pointer<Int32> pointer);
+typedef FreePointerFunction = void Function(Pointer<Int32> pointer);
+
 // https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
 
 class NativeSudokuScannerBridge {
-  static String tfliteModelPath = "";
+  static late DynamicLibrary _nativeSudokuScanner;
+  static late String _tfliteModelPath;
 
   static void init() async {
     final extDir = await getExternalStorageDirectory();
-    tfliteModelPath = extDir!.path + "/model.tflite";
-    if (!await File(tfliteModelPath).exists()) {
+    _tfliteModelPath = extDir!.path + "/model.tflite";
+
+    // init native library
+    _nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+
+    if (!await File(_tfliteModelPath).exists()) {
       var tfliteModel = await rootBundle.load('assets/model.tflite');
-      File(tfliteModelPath).writeAsBytes(
-        tfliteModel.buffer.asUint8List(
-          tfliteModel.offsetInBytes,
-          tfliteModel.lengthInBytes,
-        ),
-      );
+
+      File(_tfliteModelPath).writeAsBytes(tfliteModel.buffer.asUint8List(
+        tfliteModel.offsetInBytes,
+        tfliteModel.lengthInBytes,
+      ));
     }
-    _setModel(tfliteModelPath);
+    _setModel(_tfliteModelPath);
   }
 
-  static Future<GridDetectionResult> detectGrid(String path) async {
-    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
+  static Future<DetectionResult> detectGrid(String path) async {
+    final nativeDetectGrid =
+        _nativeSudokuScanner.lookupFunction<detect_grid_function, DetectGridFunction>("detect_grid");
 
-    final detectGrid = nativeSudokuScanner
-        .lookup<NativeFunction<detect_grid_function>>("detect_grid")
-        .asFunction<DetectGridFunction>();
+    // creates a char pointer
+    final pathPointer = path.toNativeUtf8();
 
-    NativeDetectionResult detectionResult = detectGrid(path.toNativeUtf8()).ref;
+    DetectionResult detectionResult = nativeDetectGrid(pathPointer);
 
-    return GridDetectionResult(
-        topLeft: Offset(detectionResult.topLeft.ref.x, detectionResult.topLeft.ref.y),
-        topRight: Offset(detectionResult.topRight.ref.x, detectionResult.topRight.ref.y),
-        bottomLeft: Offset(detectionResult.bottomLeft.ref.x, detectionResult.bottomLeft.ref.y),
-        bottomRight: Offset(detectionResult.bottomRight.ref.x, detectionResult.bottomRight.ref.y));
+    // need to free memory
+    malloc.free(pathPointer);
+
+    return detectionResult;
   }
 
-  static Future<List<int>> extractGrid(String path, GridDetectionResult result) async {
-    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
+  static Future<List<int>> extractGrid(String path, DetectionResult detectionResult) async {
+    final nativeExtractGrid =
+        _nativeSudokuScanner.lookupFunction<extract_grid_function, ExtractGridFunction>("extract_grid");
 
-    final extractGrid = nativeSudokuScanner
-        .lookup<NativeFunction<extract_grid_function>>("extract_grid")
-        .asFunction<ExtractGridFunction>();
+    // creates a char pointer
+    final pathPointer = path.toNativeUtf8();
 
-    Pointer<Int32> gridArray = extractGrid(
-        path.toNativeUtf8(),
-        result.topLeft.dx,
-        result.topLeft.dy,
-        result.topRight.dx,
-        result.topRight.dy,
-        result.bottomLeft.dx,
-        result.bottomLeft.dy,
-        result.bottomRight.dx,
-        result.bottomRight.dy);
+    Pointer<Int32> gridArray = nativeExtractGrid(pathPointer, detectionResult);
 
     List<int> gridList = gridArray.asTypedList(81);
 
+    // free memory
+    malloc.free(pathPointer);
+    _freePointer(gridArray);
+
+    // TODO: delete (only for debug)
     gridList.forEach((elem) {
       if (elem != 0) print("array: $elem");
     });
@@ -197,17 +142,27 @@ class NativeSudokuScannerBridge {
     return gridList;
   }
 
-  static Future<List<int>> extractGridfromRoi(String path, double roiSize, double roiOffset, double aspectRatio) async {
-    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
+  static Future<List<int>> extractGridfromRoi(
+    String path,
+    double roiSize,
+    double roiOffset,
+    double aspectRatio,
+  ) async {
+    final nativeExtractGridfromRoi = _nativeSudokuScanner
+        .lookupFunction<extract_grid_from_roi_function, ExtractGridFromRoiFunction>("extract_grid_from_roi");
 
-    final extractGridfromRoi = nativeSudokuScanner
-        .lookup<NativeFunction<extract_grid_from_roi_function>>("extract_grid_from_roi")
-        .asFunction<ExtractGridFromRoiFunction>();
+    // creates a char pointer
+    final pathPointer = path.toNativeUtf8();
 
-    Pointer<Int32> gridArray = extractGridfromRoi(path.toNativeUtf8(), roiSize, roiOffset, aspectRatio);
+    Pointer<Int32> gridArray = nativeExtractGridfromRoi(pathPointer, roiSize, roiOffset, aspectRatio);
 
     List<int> gridList = gridArray.asTypedList(81);
 
+    // free memory
+    malloc.free(pathPointer);
+    _freePointer(gridArray);
+
+    // TODO: delete (only for debug)
     gridList.forEach((elem) {
       if (elem != 0) print("array: $elem");
     });
@@ -216,41 +171,51 @@ class NativeSudokuScannerBridge {
   }
 
   static Future<bool> debugGridDetection(String path) async {
-    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
+    final nativeDebugGridDetection =
+        _nativeSudokuScanner.lookupFunction<debug_function, DebugFunction>("debug_grid_detection");
 
-    final debugGridDetection =
-        nativeSudokuScanner.lookup<NativeFunction<debug_function>>("debug_grid_detection").asFunction<DebugFunction>();
+    // creates a char pointer
+    final pathPointer = path.toNativeUtf8();
 
-    int debugImage = debugGridDetection(path.toNativeUtf8());
+    int debugImage = nativeDebugGridDetection(pathPointer);
 
-    return debugImage == 1;
-  }
-
-  static Future<bool> debugGridExtraction(String path, GridDetectionResult result) async {
-    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
-
-    final debugGridExtraction = nativeSudokuScanner
-        .lookup<NativeFunction<debug_grid_extraction_function>>("debug_grid_extraction")
-        .asFunction<DebugGridExtractionFunction>();
-
-    int debugImage = debugGridExtraction(path.toNativeUtf8(), result.topLeft.dx, result.topLeft.dy, result.topRight.dx,
-        result.topRight.dy, result.bottomLeft.dx, result.bottomLeft.dy, result.bottomRight.dx, result.bottomRight.dy);
+    // free memory
+    malloc.free(pathPointer);
 
     return debugImage == 1;
   }
 
-  static void _setModel(String path) async {
-    DynamicLibrary nativeSudokuScanner = _getDynamicLibrary();
+  static Future<bool> debugGridExtraction(String path, DetectionResult detectionResult) async {
+    final nativeDebugGridExtraction = _nativeSudokuScanner
+        .lookupFunction<debug_grid_extraction_function, DebugGridExtractionFunction>("debug_grid_extraction");
 
-    final setModel =
-        nativeSudokuScanner.lookup<NativeFunction<set_model_function>>("set_model").asFunction<SetModelFunction>();
+    // creates a char pointer
+    final pathPointer = path.toNativeUtf8();
 
-    setModel(path.toNativeUtf8());
+    int debugImage = nativeDebugGridExtraction(pathPointer, detectionResult);
+
+    // free memory
+    malloc.free(pathPointer);
+
+    return debugImage == 1;
   }
 
-  static DynamicLibrary _getDynamicLibrary() {
-    final DynamicLibrary nativeSudokuScanner =
-        Platform.isAndroid ? DynamicLibrary.open("libnative_sudoku_scanner.so") : DynamicLibrary.process();
-    return nativeSudokuScanner;
+  static void _setModel(String path) {
+    final nativeSetModel = _nativeSudokuScanner.lookupFunction<set_model_function, SetModelFunction>("set_model");
+
+    // creates a char pointer
+    final pathPointer = path.toNativeUtf8();
+
+    nativeSetModel(pathPointer);
+
+    // free memory
+    malloc.free(pathPointer);
+  }
+
+  static void _freePointer(Pointer<Int32> pointer) {
+    final nativeFreePointer =
+        _nativeSudokuScanner.lookupFunction<free_pointer_function, FreePointerFunction>("free_pointer");
+
+    nativeFreePointer(pointer);
   }
 }

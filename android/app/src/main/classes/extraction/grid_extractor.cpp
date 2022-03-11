@@ -2,7 +2,6 @@
 #include "classification/number_classifier.hpp"
 #include <opencv2/opencv.hpp>
 
-
 std::vector<int> GridExtractor::extract_grid(cv::Mat &img, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
     cv::Mat transformed;
     cv::Mat thresholded;
@@ -20,15 +19,15 @@ std::vector<int> GridExtractor::extract_grid(cv::Mat &img, float x1, float y1, f
 }
 
 cv::Mat GridExtractor::crop_and_transform(cv::Mat img, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4) {
-    const int size = 450; //img.size().width;
-    cv::Mat dst = cv::Mat::zeros(size, size, CV_8UC1);
+    const int dst_size = 450; //img.size().width;
+    cv::Mat dst = cv::Mat::zeros(dst_size, dst_size, CV_8UC1);
     std::vector<cv::Point2f> dst_pts;
     std::vector<cv::Point2f> img_pts;
 
     dst_pts.push_back(cv::Point(0, 0));
-    dst_pts.push_back(cv::Point(size - 1, 0));
-    dst_pts.push_back(cv::Point(0, size - 1));
-    dst_pts.push_back(cv::Point(size - 1, size - 1));
+    dst_pts.push_back(cv::Point(dst_size - 1, 0));
+    dst_pts.push_back(cv::Point(0, dst_size - 1));
+    dst_pts.push_back(cv::Point(dst_size - 1, dst_size - 1));
 
     img_pts.push_back(cv::Point2f(x1, y1));
     img_pts.push_back(cv::Point2f(x2, y2));

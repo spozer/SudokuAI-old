@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'dart:io';
 
-// A widget that only displays the extracted sudoku grid (can't interact).
+/// A widget that only displays the extracted sudoku grid (not interactable).
 class SudokuView extends StatelessWidget {
   final List<int> sudokuGrid;
 
@@ -10,13 +10,8 @@ class SudokuView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // run debug grid detection from sudoku scanner
-    // NativeSudokuScannerBridge.debugGridDetection(imagePath);
-
     return Scaffold(
       appBar: AppBar(title: Text('Sudoku')),
-      // The image is stored as a file on the device. Use the `Image.file`
-      // constructor with the given path to display the image.
       body: Center(
         child: _getSudokuGrid(),
       ),

@@ -5,69 +5,45 @@
 #include "extraction/structs/cell.hpp"
 #include <opencv2/opencv.hpp>
 
-extern "C" __attribute__((visibility("hidden"))) __attribute__((used)) struct Coordinate *create_coordinate(double x, double y) {
-    struct Coordinate *coordinate = (struct Coordinate *)malloc(sizeof(struct Coordinate));
-    coordinate->x = x;
-    coordinate->y = y;
-    return coordinate;
-}
-
-extern "C" __attribute__((visibility("hidden"))) __attribute__((used)) struct DetectionResult *create_detection_result(Coordinate *topLeft, Coordinate *topRight, Coordinate *bottomLeft, Coordinate *bottomRight) {
-    struct DetectionResult *detectionResult = (struct DetectionResult *)malloc(sizeof(struct DetectionResult));
-    detectionResult->topLeft = topLeft;
-    detectionResult->topRight = topRight;
-    detectionResult->bottomLeft = bottomLeft;
-    detectionResult->bottomRight = bottomRight;
-    return detectionResult;
-}
-
-extern "C" __attribute__((visibility("default"))) __attribute__((used)) struct DetectionResult *detect_grid(char *path) {
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+struct DetectionResult detect_grid(char *path) {
     // struct DetectionResult *coordinate = (struct DetectionResult *)malloc(sizeof(struct DetectionResult));
     cv::Mat mat = cv::imread(path);
 
     if (mat.size().width == 0 || mat.size().height == 0) {
-        return create_detection_result(
-            create_coordinate(0, 0),
-            create_coordinate(1, 0),
-            create_coordinate(0, 1),
-            create_coordinate(1, 1));
+        return DetectionResult{
+            Coordinate{0, 0},
+            Coordinate{1, 0},
+            Coordinate{0, 1},
+            Coordinate{1, 1}};
     }
 
     std::vector<cv::Point> points = GridDetector::detect_grid(mat);
 
-    return create_detection_result(
-        create_coordinate((double)points[0].x / mat.size().width, (double)points[0].y / mat.size().height),
-        create_coordinate((double)points[1].x / mat.size().width, (double)points[1].y / mat.size().height),
-        create_coordinate((double)points[2].x / mat.size().width, (double)points[2].y / mat.size().height),
-        create_coordinate((double)points[3].x / mat.size().width, (double)points[3].y / mat.size().height));
+    return DetectionResult{
+        Coordinate{(double)points[0].x / mat.size().width, (double)points[0].y / mat.size().height},
+        Coordinate{(double)points[1].x / mat.size().width, (double)points[1].y / mat.size().height},
+        Coordinate{(double)points[2].x / mat.size().width, (double)points[2].y / mat.size().height},
+        Coordinate{(double)points[3].x / mat.size().width, (double)points[3].y / mat.size().height}};
 }
 
-extern "C" __attribute__((visibility("default"))) __attribute__((used)) int *extract_grid(
-    char *path,
-    double topLeftX,
-    double topLeftY,
-    double topRightX,
-    double topRightY,
-    double bottomLeftX,
-    double bottomLeftY,
-    double bottomRightX,
-    double bottomRightY) {
-
-    assert(topLeftX > 0 && topLeftY > 0 && topRightX > 0 && topRightY > 0 && bottomLeftX > 0 && bottomLeftY > 0 && bottomRightX > 0 && bottomRightX > 0);
-    assert(topLeftX <= topRightX && topLeftX <= bottomRightX && bottomLeftX <= topRightX && bottomLeftX <= bottomRightX && topLeftY <= bottomLeftY && topLeftY <= bottomRightY && topRightY <= bottomLeftY && topRightY <= bottomRightY);
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+int *extract_grid(char *path, DetectionResult detection_result) {
+    // assert(topLeftX > 0 && topLeftY > 0 && topRightX > 0 && topRightY > 0 && bottomLeftX > 0 && bottomLeftY > 0 && bottomRightX > 0 && bottomRightX > 0);
+    // assert(topLeftX <= topRightX && topLeftX <= bottomRightX && bottomLeftX <= topRightX && bottomLeftX <= bottomRightX && topLeftY <= bottomLeftY && topLeftY <= bottomRightY && topRightY <= bottomLeftY && topRightY <= bottomRightY);
 
     cv::Mat mat = cv::imread(path);
 
     std::vector<int> grid = GridExtractor::extract_grid(
         mat,
-        topLeftX * mat.size().width,
-        topLeftY * mat.size().height,
-        topRightX * mat.size().width,
-        topRightY * mat.size().height,
-        bottomLeftX * mat.size().width,
-        bottomLeftY * mat.size().height,
-        bottomRightX * mat.size().width,
-        bottomRightY * mat.size().height);
+        detection_result.top_left.x * mat.size().width,
+        detection_result.top_left.y * mat.size().height,
+        detection_result.top_right.x * mat.size().width,
+        detection_result.top_right.y * mat.size().height,
+        detection_result.bottom_left.x * mat.size().width,
+        detection_result.bottom_left.y * mat.size().height,
+        detection_result.bottom_right.x * mat.size().width,
+        detection_result.bottom_right.y * mat.size().height);
 
     int *grid_ptr = (int*)malloc(grid.size() * sizeof(int));
 
@@ -79,7 +55,8 @@ extern "C" __attribute__((visibility("default"))) __attribute__((used)) int *ext
     return grid_ptr;
 }
 
-extern "C" __attribute__((visibility("default"))) __attribute__((used)) int *extract_grid_from_roi(
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+int *extract_grid_from_roi(
     char *path,
     double roiSize,
     double roiOffset,
@@ -134,7 +111,8 @@ extern "C" __attribute__((visibility("default"))) __attribute__((used)) int *ext
     return grid_ptr;
 }
 
-extern "C" __attribute__((visibility("default"))) __attribute__((used)) bool debug_grid_detection(char *path) {
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+bool debug_grid_detection(char *path) {
     cv::Mat thresholded;
     cv::Mat img = cv::imread(path);
 
@@ -145,16 +123,8 @@ extern "C" __attribute__((visibility("default"))) __attribute__((used)) bool deb
     return cv::imwrite(path, thresholded);
 }
 
-extern "C" __attribute__((visibility("default"))) __attribute__((used)) bool debug_grid_extraction(
-    char *path,
-    double topLeftX,
-    double topLeftY,
-    double topRightX,
-    double topRightY,
-    double bottomLeftX,
-    double bottomLeftY,
-    double bottomRightX,
-    double bottomRightY) {
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+bool debug_grid_extraction(char *path, DetectionResult detection_result) {
     cv::Mat transformed;
     cv::Mat thresholded;
     cv::Mat img = cv::imread(path);
@@ -162,14 +132,14 @@ extern "C" __attribute__((visibility("default"))) __attribute__((used)) bool deb
     cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
     transformed = GridExtractor::crop_and_transform(
         img,
-        topLeftX * img.size().width,
-        topLeftY * img.size().height,
-        topRightX * img.size().width,
-        topRightY * img.size().height,
-        bottomLeftX * img.size().width,
-        bottomLeftY * img.size().height,
-        bottomRightX * img.size().width,
-        bottomRightY * img.size().height);
+        detection_result.top_left.x * img.size().width,
+        detection_result.top_left.y * img.size().height,
+        detection_result.top_right.x * img.size().width,
+        detection_result.top_right.y * img.size().height,
+        detection_result.bottom_left.x * img.size().width,
+        detection_result.bottom_left.y * img.size().height,
+        detection_result.bottom_right.x * img.size().width,
+        detection_result.bottom_right.y * img.size().height);
     // always check parameters with grid_extractor.cpp
     cv::adaptiveThreshold(transformed, thresholded, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 63, 10);
 
@@ -179,6 +149,12 @@ extern "C" __attribute__((visibility("default"))) __attribute__((used)) bool deb
     return cv::imwrite(path, stitched);
 }
 
-extern "C" __attribute__((visibility("default"))) __attribute__((used)) void set_model(char *path) {
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+void set_model(char *path) {
     setenv(PATH_TO_MODEL_ENV_VAR, path, 1);
+}
+
+extern "C" __attribute__((visibility("default"))) __attribute__((used))
+void free_pointer(int *pointer) {
+    free(pointer);
 }
