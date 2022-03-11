@@ -20,7 +20,7 @@ class CameraView extends StatefulWidget {
   _CameraViewState createState() => _CameraViewState();
 }
 
-class _CameraViewState extends State<CameraView> {
+class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   late CameraController _controller;
   late Future<void> _initializeControllerFuture;
   // Offset percentage from center to top.
@@ -31,33 +31,50 @@ class _CameraViewState extends State<CameraView> {
   late double _cameraWidgetAspectRatio;
 
   // Various states.
+  bool _isCameraInitialized = false;
   bool _takingPicture = false;
   bool _isFlashOn = false;
+  bool _wasFlashOn = false;
   bool _wasInitializing = true;
 
   @override
   void initState() {
     super.initState();
-    // To display the current output from the Camera,
-    // create a CameraController.
-    _controller = CameraController(
-      // Get a specific camera from the list of available cameras.
-      widget.camera,
-      // Define the resolution to use.
-      ResolutionPreset.max,
-      // Audio not needed
-      enableAudio: false,
-    );
-
-    // Next, initialize the controller. This returns a Future.
-    _initializeControllerFuture = _controller.initialize();
+    WidgetsBinding.instance!.addObserver(this);
+    _initCamera();
   }
 
   @override
   void dispose() {
     // Dispose of the controller when the widget is disposed.
-    _controller.dispose();
+    if (_isCameraInitialized) _controller.dispose();
+    WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When the app gets minimized or when a other app gets
+    // control of the camera api the current [CameraController]
+    // is not valid anymore. Therefore the camera needs to
+    // be reinitialized on resume.
+    if (state == AppLifecycleState.resumed) {
+      debugPrint("CameraView state changed to resumed");
+      if (!_isCameraInitialized) _initCamera();
+
+      // Resume last state of camera flash.
+      if (_isCameraInitialized) {
+        _wasFlashOn ? _turnFlashOn() : _turnFlashOff();
+        _wasFlashOn = false;
+      }
+    } else if (state == AppLifecycleState.paused) {
+      // Make sure the current [CameraController] gets disposed of cleanly.
+      debugPrint("CameraView state changed to paused");
+      _wasFlashOn = _isFlashOn;
+      _turnFlashOff();
+      _controller.dispose();
+      _isCameraInitialized = false;
+    }
   }
 
   @override
@@ -90,6 +107,29 @@ class _CameraViewState extends State<CameraView> {
         ],
       ),
     );
+  }
+
+  /// Initialize the Camera.
+  Future<void> _initCamera() async {
+    // To display the current output from the Camera,
+    // create a CameraController.
+    _controller = CameraController(
+      // Get a specific camera from the list of available cameras.
+      widget.camera,
+      // Define the resolution to use.
+      ResolutionPreset.max,
+      // Audio not needed
+      enableAudio: false,
+    );
+
+    // Initialize the controller.
+    _initializeControllerFuture = _controller.initialize();
+
+    if (mounted) {
+      setState(() {
+        _isCameraInitialized = true;
+      });
+    }
   }
 
   /// A widget to show the camera preview.
