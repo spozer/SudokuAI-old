@@ -5,6 +5,8 @@ import 'package:ffi/ffi.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+// example at https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
+
 class Coordinate extends Struct {
   @Double()
   external double x;
@@ -19,12 +21,6 @@ class DetectionResult extends Struct {
   external Coordinate bottomLeft;
   external Coordinate bottomRight;
 }
-
-// asTypedList for Array Type will be available eventually (see https://github.com/dart-lang/sdk/issues/45508)
-// class GridArray extends Struct {
-//   @Array(81)
-//   Array<Int32> array;
-// }
 
 // ignore: camel_case_types
 typedef detect_grid_function = DetectionResult Function(Pointer<Utf8> imagePath);
@@ -80,8 +76,6 @@ typedef SetModelFunction = void Function(Pointer<Utf8> path);
 typedef free_pointer_function = Void Function(Pointer<Int32> pointer);
 typedef FreePointerFunction = void Function(Pointer<Int32> pointer);
 
-// https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
-
 class NativeSudokuScannerBridge {
   static late DynamicLibrary _nativeSudokuScanner;
   static late String _tfliteModelPath;
@@ -134,11 +128,6 @@ class NativeSudokuScannerBridge {
     malloc.free(pathPointer);
     _freePointer(gridArray);
 
-    // TODO: delete (only for debug)
-    gridList.forEach((elem) {
-      if (elem != 0) print("array: $elem");
-    });
-
     return gridList;
   }
 
@@ -161,11 +150,6 @@ class NativeSudokuScannerBridge {
     // free memory
     malloc.free(pathPointer);
     _freePointer(gridArray);
-
-    // TODO: delete (only for debug)
-    gridList.forEach((elem) {
-      if (elem != 0) print("array: $elem");
-    });
 
     return gridList;
   }

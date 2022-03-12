@@ -46,8 +46,9 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    debugPrint("Dispose CameraView");
     // Dispose of the controller when the widget is disposed.
-    if (_isCameraInitialized) _controller.dispose();
+    _closeCamera();
     WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
   }
@@ -60,7 +61,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // be reinitialized on resume.
     if (state == AppLifecycleState.resumed) {
       debugPrint("CameraView state changed to resumed");
-      if (!_isCameraInitialized) _initCamera();
+      _initCamera();
 
       // Resume last state of camera flash.
       if (_isCameraInitialized) {
@@ -70,10 +71,9 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.paused) {
       // Make sure the current [CameraController] gets disposed of cleanly.
       debugPrint("CameraView state changed to paused");
+      // Save current state of camera flash.
       _wasFlashOn = _isFlashOn;
-      _turnFlashOff();
-      _controller.dispose();
-      _isCameraInitialized = false;
+      _closeCamera();
     }
   }
 
@@ -109,8 +109,10 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     );
   }
 
-  /// Initialize the Camera.
+  /// Initialize the camera.
   Future<void> _initCamera() async {
+    if (_isCameraInitialized) return;
+
     // To display the current output from the Camera,
     // create a CameraController.
     _controller = CameraController(
@@ -128,6 +130,21 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     if (mounted) {
       setState(() {
         _isCameraInitialized = true;
+        _wasInitializing = true;
+      });
+    }
+  }
+
+  // Dispose of camera.
+  Future<void> _closeCamera() async {
+    if (!_isCameraInitialized) return;
+
+    _controller.dispose();
+
+    if (mounted) {
+      setState(() {
+        _isCameraInitialized = false;
+        _isFlashOn = false;
       });
     }
   }
@@ -148,7 +165,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     return FutureBuilder<void>(
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
+        if (snapshot.connectionState == ConnectionState.done && _isCameraInitialized) {
           // Flash mode is set to auto as default so turn it off right
           // after camera is done initializing for the first time.
           if (_wasInitializing) {
@@ -392,16 +409,18 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       // Ensure that the camera is initialized.
       await _initializeControllerFuture;
 
+      // TODO: show taking picture animation here
+
       // Attempt to take a picture and get the file `image`
       // where it was saved.
       final image = await _controller.takePicture();
 
-      // In case flash was turned on before
-      _turnFlashOff();
-
       setState(() {
         _takingPicture = false;
       });
+
+      // We don't need camera anymore.
+      _closeCamera();
 
       // If the picture was taken, extract Sudoku and display it.
       final sudokuFuture = NativeSudokuScannerBridge.extractGridfromRoi(
@@ -458,5 +477,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
         ),
       ),
     );
+
+    if (!_isCameraInitialized) _initCamera();
   }
 }
