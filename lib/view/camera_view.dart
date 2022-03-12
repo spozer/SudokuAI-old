@@ -126,11 +126,12 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // Set initial flash mode.
     _controller.setFlashMode(flashOn ? FlashMode.torch : FlashMode.off);
 
+    _isCameraInitialized = true;
+    _isFlashOn = flashOn;
+
     if (mounted) {
-      setState(() {
-        _isCameraInitialized = true;
-        _isFlashOn = flashOn;
-      });
+      // Refresh page if mounted.
+      setState(() {});
     }
   }
 
@@ -140,11 +141,11 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
     _controller.dispose();
 
+    _isCameraInitialized = false;
+
     if (mounted) {
-      setState(() {
-        _isCameraInitialized = false;
-        _isFlashOn = false;
-      });
+      // Refresh page if mounted.
+      setState(() {});
     }
   }
 
@@ -413,6 +414,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
       // We don't need camera anymore.
       _closeCamera();
+      _isFlashOn = false;
 
       // If the picture was taken, extract Sudoku and display it.
       final sudokuFuture = NativeSudokuScannerBridge.extractGridfromRoi(
