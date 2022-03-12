@@ -1,6 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
-import 'dart:io';
 
 /// A widget that only displays the extracted sudoku grid (not interactable).
 class SudokuView extends StatelessWidget {

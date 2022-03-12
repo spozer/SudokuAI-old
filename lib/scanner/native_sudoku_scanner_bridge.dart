@@ -5,7 +5,11 @@ import 'package:ffi/ffi.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
-// example at https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
+// Example at https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
+
+// Structs don't have to be allocated to be passed as value from dart to native c code:
+// https://medium.com/dartlang/implementing-structs-by-value-in-dart-ffi-1cb1829d11a9
+// Futhermore structs returned from native c code to dart are backed in c heap
 
 class Coordinate extends Struct {
   @Double()
@@ -80,11 +84,11 @@ class NativeSudokuScannerBridge {
   static late DynamicLibrary _nativeSudokuScanner;
   static late String _tfliteModelPath;
 
-  static void init() async {
+  static Future<void> init() async {
     final extDir = await getExternalStorageDirectory();
     _tfliteModelPath = extDir!.path + "/model.tflite";
 
-    // init native library
+    // Initialize native library.
     _nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
 
     if (!await File(_tfliteModelPath).exists()) {
@@ -102,12 +106,12 @@ class NativeSudokuScannerBridge {
     final nativeDetectGrid =
         _nativeSudokuScanner.lookupFunction<detect_grid_function, DetectGridFunction>("detect_grid");
 
-    // creates a char pointer
+    // Creates a char pointer.
     final pathPointer = path.toNativeUtf8();
 
     DetectionResult detectionResult = nativeDetectGrid(pathPointer);
 
-    // need to free memory
+    // Need to free memory.
     malloc.free(pathPointer);
 
     return detectionResult;
@@ -117,14 +121,18 @@ class NativeSudokuScannerBridge {
     final nativeExtractGrid =
         _nativeSudokuScanner.lookupFunction<extract_grid_function, ExtractGridFunction>("extract_grid");
 
-    // creates a char pointer
+    // Creates a char pointer.
     final pathPointer = path.toNativeUtf8();
 
     Pointer<Int32> gridArray = nativeExtractGrid(pathPointer, detectionResult);
 
-    List<int> gridList = gridArray.asTypedList(81);
+    // It is not clear, whether asTypeList gets handled from GC or not:
+    // https://github.com/dart-lang/ffi/issues/22
+    // https://github.com/dart-lang/sdk/issues/45508
+    // Either way it is probably better to free c heap in native code.
+    List<int> gridList = List.from(gridArray.asTypedList(81));
 
-    // free memory
+    // Free memory.
     malloc.free(pathPointer);
     _freePointer(gridArray);
 
@@ -145,9 +153,13 @@ class NativeSudokuScannerBridge {
 
     Pointer<Int32> gridArray = nativeExtractGridfromRoi(pathPointer, roiSize, roiOffset, aspectRatio);
 
-    List<int> gridList = gridArray.asTypedList(81);
+    // It is not clear, whether asTypeList gets handled from GC or not:
+    // https://github.com/dart-lang/ffi/issues/22
+    // https://github.com/dart-lang/sdk/issues/45508
+    // Either way it is probably better to free c heap in native code.
+    List<int> gridList = List.from(gridArray.asTypedList(81));
 
-    // free memory
+    // Free memory.
     malloc.free(pathPointer);
     _freePointer(gridArray);
 
@@ -158,12 +170,12 @@ class NativeSudokuScannerBridge {
     final nativeDebugGridDetection =
         _nativeSudokuScanner.lookupFunction<debug_function, DebugFunction>("debug_grid_detection");
 
-    // creates a char pointer
+    // Creates a char pointer.
     final pathPointer = path.toNativeUtf8();
 
     int debugImage = nativeDebugGridDetection(pathPointer);
 
-    // free memory
+    // Free memory.
     malloc.free(pathPointer);
 
     return debugImage == 1;
@@ -173,30 +185,30 @@ class NativeSudokuScannerBridge {
     final nativeDebugGridExtraction = _nativeSudokuScanner
         .lookupFunction<debug_grid_extraction_function, DebugGridExtractionFunction>("debug_grid_extraction");
 
-    // creates a char pointer
+    // Creates a char pointer.
     final pathPointer = path.toNativeUtf8();
 
     int debugImage = nativeDebugGridExtraction(pathPointer, detectionResult);
 
-    // free memory
+    // Free memory.
     malloc.free(pathPointer);
 
     return debugImage == 1;
   }
 
-  static void _setModel(String path) {
+  static Future<void> _setModel(String path) async {
     final nativeSetModel = _nativeSudokuScanner.lookupFunction<set_model_function, SetModelFunction>("set_model");
 
-    // creates a char pointer
+    // Creates a char pointer.
     final pathPointer = path.toNativeUtf8();
 
     nativeSetModel(pathPointer);
 
-    // free memory
+    // Free memory.
     malloc.free(pathPointer);
   }
 
-  static void _freePointer(Pointer<Int32> pointer) {
+  static Future<void> _freePointer(Pointer<Int32> pointer) async {
     final nativeFreePointer =
         _nativeSudokuScanner.lookupFunction<free_pointer_function, FreePointerFunction>("free_pointer");
 

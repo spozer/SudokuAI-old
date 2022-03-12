@@ -1,3 +1,5 @@
+import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,7 +7,6 @@ import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'package:sudokuai/view/sudoku_view.dart';
 import 'picture_view.dart';
 import 'sudoku_view.dart';
-import 'dart:ui';
 
 /// The main widget for taking pictures.
 class CameraView extends StatefulWidget {

@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
-import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'dart:io';
+import 'package:flutter/material.dart';
 
 /// A widget that displays the picture taken by the user.
 class PictureView extends StatelessWidget {
