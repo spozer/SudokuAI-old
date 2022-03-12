@@ -36,7 +36,6 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   bool _takingPicture = false;
   bool _isFlashOn = false;
   bool _wasFlashOn = false;
-  bool _wasInitializing = true;
 
   @override
   void initState() {
@@ -62,13 +61,8 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // be reinitialized on resume.
     if (state == AppLifecycleState.resumed) {
       debugPrint("CameraView state changed to resumed");
-      _initCamera();
-
-      // Resume last state of camera flash.
-      if (_isCameraInitialized) {
-        _wasFlashOn ? _turnFlashOn() : _turnFlashOff();
-        _wasFlashOn = false;
-      }
+      // Resume with last state of camera flash.
+      _initCamera(flashOn: _wasFlashOn);
     } else if (state == AppLifecycleState.paused) {
       // Make sure the current [CameraController] gets disposed of cleanly.
       debugPrint("CameraView state changed to paused");
@@ -111,7 +105,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   }
 
   /// Initialize the camera.
-  Future<void> _initCamera() async {
+  Future<void> _initCamera({bool flashOn = false}) async {
     if (_isCameraInitialized) return;
 
     // To display the current output from the Camera,
@@ -128,10 +122,14 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // Initialize the controller.
     _initializeControllerFuture = _controller.initialize();
 
+    await _initializeControllerFuture;
+    // Set initial flash mode.
+    _controller.setFlashMode(flashOn ? FlashMode.torch : FlashMode.off);
+
     if (mounted) {
       setState(() {
         _isCameraInitialized = true;
-        _wasInitializing = true;
+        _isFlashOn = flashOn;
       });
     }
   }
@@ -167,13 +165,6 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done && _isCameraInitialized) {
-          // Flash mode is set to auto as default so turn it off right
-          // after camera is done initializing for the first time.
-          if (_wasInitializing) {
-            _controller.setFlashMode(FlashMode.off);
-            _wasInitializing = false;
-          }
-
           final cameraSize = _controller.value.previewSize!;
           // Camera size is in landscape mode but we want aspect ratio from
           // portrait mode.
