@@ -31,15 +31,19 @@ class SudokuView extends StatelessWidget {
             return Container(
                 decoration: BoxDecoration(
                   border: Border(
-                    left: BorderSide(
-                      width: (colNum == 0) ? 3.0 : 0.0,
-                    ),
+                    left: (colNum == 0)
+                        ? BorderSide(
+                            width: 3.0,
+                          )
+                        : BorderSide.none,
                     right: BorderSide(
                       width: (colNum % 3 == 2 || colNum == 8) ? 3.0 : 1.0,
                     ),
-                    top: BorderSide(
-                      width: (rowNum == 0) ? 3.0 : 0.0,
-                    ),
+                    top: (rowNum == 0)
+                        ? BorderSide(
+                            width: 3.0,
+                          )
+                        : BorderSide.none,
                     bottom: BorderSide(
                       width: (rowNum % 3 == 2 || rowNum == 8) ? 3.0 : 1.0,
                     ),

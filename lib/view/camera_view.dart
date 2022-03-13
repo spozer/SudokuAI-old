@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -40,16 +41,17 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance!.addObserver(this);
-    _initCamera();
+    _initCamera().then(
+        // Make sure Observer is only added after camera initialization.
+        (_) => WidgetsBinding.instance!.addObserver(this));
   }
 
   @override
   void dispose() {
     debugPrint("Dispose CameraView");
+    WidgetsBinding.instance!.removeObserver(this);
     // Dispose of the controller when the widget is disposed.
     _closeCamera();
-    WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
   }
 
@@ -122,7 +124,9 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // Initialize the controller.
     _initializeControllerFuture = _controller.initialize();
 
-    await _initializeControllerFuture;
+    await _initializeControllerFuture.onError(
+        // Close app when camera access was denied by user.
+        (error, stackTrace) => exit(1));
     // Set initial flash mode.
     _controller.setFlashMode(flashOn ? FlashMode.torch : FlashMode.off);
 
