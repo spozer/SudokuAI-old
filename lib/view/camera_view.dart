@@ -23,8 +23,9 @@ class CameraView extends StatefulWidget {
 }
 
 class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
-  late CameraController _controller;
-  late Future<void> _initializeControllerFuture;
+  CameraController? _controller;
+  Future<void>? _initializeControllerFuture;
+
   // Offset percentage from center to top.
   late double _roiOffset;
   // Percentage, based off of overlay size.
@@ -33,31 +34,37 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   late double _cameraWidgetAspectRatio;
 
   // Various states.
-  bool _isCameraInitialized = false;
-  bool _takingPicture = false;
+  bool _isTakingPicture = false;
   bool _isFlashOn = false;
   bool _wasFlashOn = false;
+  // Keep in mind that _controller.value.isInitialized is not changed on
+  // dispose of camera controller. So only use this to check if camera
+  // was initialized at least oncein the past. Use the following
+  // parameter to check the actual state.
+  bool _isCameraInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _initCamera().then(
-        // Make sure Observer is only added after camera initialization.
-        (_) => WidgetsBinding.instance!.addObserver(this));
+    _initCamera();
+    WidgetsBinding.instance?.addObserver(this);
   }
 
   @override
   void dispose() {
     debugPrint("Dispose CameraView");
-    WidgetsBinding.instance!.removeObserver(this);
+    WidgetsBinding.instance?.removeObserver(this);
     // Dispose of the controller when the widget is disposed.
-    _closeCamera();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // When the app gets minimized or when a other app gets
+    // App state changed before we got the chance to initialize.
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    // When the app gets minimized or when another app gets
     // control of the camera api the current [CameraController]
     // is not valid anymore. Therefore the camera needs to
     // be reinitialized on resume.
@@ -122,35 +129,33 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     );
 
     // Initialize the controller.
-    _initializeControllerFuture = _controller.initialize();
+    _initializeControllerFuture = _controller!.initialize();
 
-    await _initializeControllerFuture.onError(
-        // Close app when camera access was denied by user.
-        (error, stackTrace) => exit(1));
-    // Set initial flash mode.
-    _controller.setFlashMode(flashOn ? FlashMode.torch : FlashMode.off);
-
-    _isCameraInitialized = true;
-    _isFlashOn = flashOn;
-
-    if (mounted) {
-      // Refresh page if mounted.
-      setState(() {});
+    try {
+      // Wait for initialization.
+      await _initializeControllerFuture;
+      _isCameraInitialized = true;
+      // Set initial flash mode.
+      await _controller!.setFlashMode(flashOn ? FlashMode.torch : FlashMode.off);
+      _isFlashOn = flashOn;
+    } on CameraException catch (e) {
+      // TODO: possible camera access denied error handling
+      debugPrint('Error in _initCamera: $e.code\nError Message: $e.message');
+      rethrow;
     }
+
+    // Refresh page if mounted.
+    if (mounted) setState(() {});
   }
 
   // Dispose of camera.
   Future<void> _closeCamera() async {
-    if (!_isCameraInitialized) return;
-
-    _controller.dispose();
-
+    if (_isCameraInitialized) _controller?.dispose();
     _isCameraInitialized = false;
+    _isFlashOn = false;
 
-    if (mounted) {
-      // Refresh page if mounted.
-      setState(() {});
-    }
+    // Refresh page if mounted.
+    if (mounted) setState(() {});
   }
 
   /// A widget to show the camera preview.
@@ -169,8 +174,10 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     return FutureBuilder<void>(
       future: _initializeControllerFuture,
       builder: (context, snapshot) {
+        // Future can have state 'done' even when finishing with errors, so
+        // check actual state of camera too.
         if (snapshot.connectionState == ConnectionState.done && _isCameraInitialized) {
-          final cameraSize = _controller.value.previewSize!;
+          final cameraSize = _controller!.value.previewSize!;
           // Camera size is in landscape mode but we want aspect ratio from
           // portrait mode.
           final cameraAspectRatio = cameraSize.width / cameraSize.height;
@@ -194,7 +201,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
                   child: SizedBox(
                     width: fitHeight ? height / cameraAspectRatio : width,
                     height: fitHeight ? height : width * cameraAspectRatio,
-                    child: CameraPreview(_controller),
+                    child: CameraPreview(_controller!),
                   ),
                 ),
               ),
@@ -226,7 +233,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
             Align(
               alignment: Alignment.center,
               // Display loading indicator while taking a picture.
-              child: _takingPicture ? CircularProgressIndicator() : Container(),
+              child: _isTakingPicture ? CircularProgressIndicator() : Container(),
             ),
             Align(
               alignment: Alignment.topLeft,
@@ -365,60 +372,42 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     );
   }
 
-  void _turnFlashOff() async {
-    if (!_isFlashOn) return;
-
-    // Ensure that the camera is initialized.
-    await _initializeControllerFuture;
-
-    _controller.setFlashMode(FlashMode.off);
-
-    setState(() {
-      _isFlashOn = false;
-    });
-  }
-
-  void _turnFlashOn() async {
-    if (_isFlashOn) return;
-
-    // Ensure that the camera is initialized.
-    await _initializeControllerFuture;
-
-    _controller.setFlashMode(FlashMode.torch);
-
-    setState(() {
-      _isFlashOn = true;
-    });
-  }
-
   /// Callback function for handling ToggleFlashButton pressed events.
   void _onToggleFlashButtonPressed() async {
-    _isFlashOn ? _turnFlashOff() : _turnFlashOn();
+    if (!_isCameraInitialized || _isTakingPicture) return;
+
+    try {
+      await _controller!.setFlashMode(_isFlashOn ? FlashMode.off : FlashMode.torch);
+      _isFlashOn = !_isFlashOn;
+    } on CameraException catch (e) {
+      // Ignore error, just do nothing.
+      debugPrint('Error in _onToggleFlashButtonPressed: $e.code\nError Message: $e.message');
+    }
+
+    if (mounted) setState(() {});
   }
 
   /// Callback function for handling TakePictureButton pressed events.
   void _onTakePictureButtonPressed() async {
+    if (!_isCameraInitialized || _isTakingPicture) return;
+
     try {
-      setState(() {
-        _takingPicture = true;
-      });
-
-      // Ensure that the camera is initialized.
-      await _initializeControllerFuture;
-
+      if (mounted) {
+        setState(() {
+          _isTakingPicture = true;
+        });
+      }
       // TODO: show taking picture animation here
 
       // Attempt to take a picture and get the file `image`
       // where it was saved.
-      final image = await _controller.takePicture();
+      final image = await _controller!.takePicture();
 
-      setState(() {
-        _takingPicture = false;
-      });
-
-      // We don't need camera anymore.
-      _closeCamera();
-      _isFlashOn = false;
+      if (mounted) {
+        setState(() {
+          _isTakingPicture = false;
+        });
+      }
 
       // If the picture was taken, extract Sudoku and display it.
       final sudokuFuture = NativeSudokuScannerBridge.extractGridfromRoi(
@@ -429,16 +418,19 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       );
 
       _showSudokuGrid(sudokuFuture);
-    } catch (e) {
+    } on CameraException catch (e) {
       // If an error occurs, log the error to the console.
-      print(e);
+      // TODO: error handling when taking picture fails
+      debugPrint('Error in _onTakePictureButtonPressed: $e.code\nError Message: $e.message');
+      rethrow;
     }
   }
 
   /// Callback function for handling GalleryButton pressed events.
   void _onGalleryButtonPressed() async {
-    // In case flash was turned on before
-    _turnFlashOff();
+    if (_isTakingPicture) return;
+    // We don't need camera anymore.
+    _closeCamera();
 
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
@@ -466,6 +458,8 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   void _showSudokuGrid(Future<List<int>> sudokuFuture) async {
     final sudokuGrid = await sudokuFuture;
 
+    // We don't need camera anymore.
+    _closeCamera();
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => SudokuView(
