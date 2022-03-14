@@ -3,7 +3,9 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'package:sudokuai/view/sudoku_view.dart';
 import 'picture_view.dart';
@@ -42,11 +44,14 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   // was initialized at least oncein the past. Use the following
   // parameter to check the actual state.
   bool _isCameraInitialized = false;
+  bool _isCameraAccessGranted = false;
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
+    _getCameraPermission().then((_) {
+      _initCamera();
+    });
     WidgetsBinding.instance?.addObserver(this);
   }
 
@@ -113,9 +118,66 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     );
   }
 
+  /// Warning dialog that camera permission could not be granted.
+  ///
+  /// Give the user the option to change permissions in app settings,
+  /// or to close the app completely.
+  Future<void> _showPermissionDialog() async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false, // user must tap button!
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Camera permission'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: const <Widget>[
+                Text("To use the camera, you first have to grant access"
+                    "to it. You can change permissions in the app settings."),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Retry'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('Close'),
+              onPressed: () {
+                exit(-1);
+              },
+            ),
+            TextButton(
+              child: const Text('Settings'),
+              onPressed: () {
+                openAppSettings();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Requests permission to use camera.
+  Future<void> _getCameraPermission() async {
+    final status = await Permission.camera.request();
+
+    _isCameraAccessGranted = status.isGranted;
+
+    if (status.isPermanentlyDenied) {
+      // Show warning to user.
+      await _showPermissionDialog();
+      _getCameraPermission();
+    }
+  }
+
   /// Initialize the camera.
   Future<void> _initCamera({bool flashOn = false}) async {
-    if (_isCameraInitialized) return;
+    if (_isCameraInitialized || !_isCameraAccessGranted) return;
 
     // To display the current output from the Camera,
     // create a CameraController.
@@ -139,9 +201,8 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       await _controller!.setFlashMode(flashOn ? FlashMode.torch : FlashMode.off);
       _isFlashOn = flashOn;
     } on CameraException catch (e) {
-      // TODO: possible camera access denied error handling
+      // Ignore error, just move on.
       debugPrint('Error in _initCamera: $e.code\nError Message: $e.message');
-      rethrow;
     }
 
     // Refresh page if mounted.
@@ -176,7 +237,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       builder: (context, snapshot) {
         // Future can have state 'done' even when finishing with errors, so
         // check actual state of camera too.
-        if (snapshot.connectionState == ConnectionState.done && _isCameraInitialized) {
+        if (snapshot.connectionState == ConnectionState.done && !snapshot.hasError) {
           final cameraSize = _controller!.value.previewSize!;
           // Camera size is in landscape mode but we want aspect ratio from
           // portrait mode.
@@ -209,7 +270,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
           );
         } else {
           // Otherwise, display a loading indicator.
-          return Center(child: CircularProgressIndicator());
+          return Container(color: Colors.black);
         }
       },
     );
@@ -419,7 +480,6 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
       _showSudokuGrid(sudokuFuture);
     } on CameraException catch (e) {
-      // If an error occurs, log the error to the console.
       // TODO: error handling when taking picture fails
       debugPrint('Error in _onTakePictureButtonPressed: $e.code\nError Message: $e.message');
       rethrow;
@@ -429,16 +489,25 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   /// Callback function for handling GalleryButton pressed events.
   void _onGalleryButtonPressed() async {
     if (_isTakingPicture) return;
-    // We don't need camera anymore.
-    _closeCamera();
 
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
+    try {
+      // TODO: maybe implement transition stage which replaces Camera View
+      // Set flash state to default off, or otherwise state gets saved by
+      // App Lifecycle Observer because opening Image Picker (Gallery)
+      // causes app to get paused/resumed.
+      _isFlashOn = false;
+      final picker = ImagePicker();
+      final image = await picker.pickImage(source: ImageSource.gallery);
 
-    if (image != null) {
-      final resultBB = await NativeSudokuScannerBridge.detectGrid(image.path);
-      final sudokuFuter = NativeSudokuScannerBridge.extractGrid(image.path, resultBB);
-      _showSudokuGrid(sudokuFuter);
+      if (image != null) {
+        final resultBB = await NativeSudokuScannerBridge.detectGrid(image.path);
+        final sudokuFuture = NativeSudokuScannerBridge.extractGrid(image.path, resultBB);
+        _showSudokuGrid(sudokuFuture);
+      }
+    } on PlatformException catch (e) {
+      // TODO: error handling when picking image fails
+      debugPrint('Error in _onGalleryButtonPressed: $e.code\nError Message: $e.message');
+      rethrow;
     }
   }
 
@@ -458,15 +527,21 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   void _showSudokuGrid(Future<List<int>> sudokuFuture) async {
     final sudokuGrid = await sudokuFuture;
 
+    _openNewPage(SudokuView(
+      // Pass the automatically generated path to
+      // the SudokuGrid widget.
+      sudokuGrid: sudokuGrid,
+    ));
+  }
+
+  /// Opens new page on top of this one.
+  void _openNewPage(Widget widget) async {
     // We don't need camera anymore.
     _closeCamera();
+
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => SudokuView(
-          // Pass the automatically generated path to
-          // the SudokuGrid widget.
-          sudokuGrid: sudokuGrid,
-        ),
+        builder: (context) => widget,
       ),
     );
 
