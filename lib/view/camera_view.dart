@@ -133,7 +133,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
             child: ListBody(
               children: const <Widget>[
                 Text("To use the camera, you first have to grant access"
-                    "to it. You can change permissions in the app settings."),
+                    " to it. You can change permissions in the app settings."),
               ],
             ),
           ),
@@ -171,7 +171,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     if (status.isPermanentlyDenied) {
       // Show warning to user.
       await _showPermissionDialog();
-      _getCameraPermission();
+      await _getCameraPermission();
     }
   }
 
@@ -237,7 +237,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       builder: (context, snapshot) {
         // Future can have state 'done' even when finishing with errors, so
         // check actual state of camera too.
-        if (snapshot.connectionState == ConnectionState.done && !snapshot.hasError) {
+        if (snapshot.connectionState == ConnectionState.done && _isCameraInitialized) {
           final cameraSize = _controller!.value.previewSize!;
           // Camera size is in landscape mode but we want aspect ratio from
           // portrait mode.
