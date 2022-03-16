@@ -103,6 +103,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // Define Region Of Interest (ROI) based on camera overlay.
     // It is expected that the user tries to place the Sudoku grid
     // inside this region.
+    // Offset from center in [-height / 2, height / 2].
     _roiOffset = -0.5 * (overlayOffset / screenHeight); // -0.09;
     _roiSize = (1.0 + (overlaySize / screenWidth)) / 2;
 
