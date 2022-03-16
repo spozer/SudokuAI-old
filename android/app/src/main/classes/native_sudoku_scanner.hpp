@@ -18,9 +18,8 @@ extern "C" int *extract_grid(
 
 extern "C" int *extract_grid_from_roi(
     char *path,
-    double roiSize,
-    double roiOffset,
-    double aspectRatio);
+    int roi_size,
+    int roi_offset);
 
 extern "C" bool debug_grid_detection(char *path);
 

@@ -32,8 +32,9 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   late double _roiOffset;
   // Percentage, based off of overlay size.
   late double _roiSize;
-  // Positioned at center of resulting picture.
-  late double _cameraWidgetAspectRatio;
+  // The actual preview size of the camera widget.
+  late double _previewHeight;
+  late double _previewWidth;
 
   // Various states.
   bool _isTakingPicture = false;
@@ -88,7 +89,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Get screen height and width.
+    // Get screen height and width (in logical pixels).
     double screenHeight = MediaQuery.of(context).size.height;
     double screenWidth = MediaQuery.of(context).size.width;
 
@@ -96,12 +97,13 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     final bottomBarHeight = screenHeight * 0.15;
     final bottomBarWidth = screenWidth * 0.9;
     final bottomBarOffset = screenHeight * 0.03;
-    final overlaySize = screenWidth * 0.7;
     final overlayOffset = bottomBarOffset + bottomBarHeight;
+    final overlaySize = screenWidth * 0.7;
 
-    // Define Region Of Interest (ROI). The user should try
-    // to place the Sudoku grid inside this region.
-    _roiOffset = overlayOffset / screenHeight; // 0.18;
+    // Define Region Of Interest (ROI) based on camera overlay.
+    // It is expected that the user tries to place the Sudoku grid
+    // inside this region.
+    _roiOffset = -0.5 * (overlayOffset / screenHeight); // -0.09;
     _roiSize = (1.0 + (overlaySize / screenWidth)) / 2;
 
     // Main widget existing of the camera preview, the ROI indicator overlay,
@@ -185,9 +187,13 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       // Get a specific camera from the list of available cameras.
       widget.camera,
       // Define the resolution to use.
-      ResolutionPreset.max,
+      // Better to use 1280x720 because the flutter camera plugin just
+      // doesn't recognize higher resolutions, even though the resulting
+      // image has the right resolution.
+      ResolutionPreset.high,
       // Audio not needed
       enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.jpeg,
     );
 
     // Initialize the controller.
@@ -238,18 +244,21 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
         // Future can have state 'done' even when finishing with errors, so
         // check actual state of camera too.
         if (snapshot.connectionState == ConnectionState.done && _isCameraInitialized) {
-          final cameraSize = _controller!.value.previewSize!;
-          // Camera size is in landscape mode but we want aspect ratio from
-          // portrait mode.
-          final cameraAspectRatio = cameraSize.width / cameraSize.height;
+          // Get camera height and width in portrait orientation.
+          final cameraWidth = _controller!.value.previewSize!.height;
+          final cameraHeight = _controller!.value.previewSize!.width;
+
+          // Get aspect ratios in landscape orientation.
+          double cameraAspectRatio = cameraHeight / cameraWidth;
           double widgetAspectRatio = height / width;
 
           // Whether we have to fit the camera preview to its height
           // or its width.
           bool fitHeight = (widgetAspectRatio > cameraAspectRatio);
 
-          // save camera aspect ratio for late use case.
-          _cameraWidgetAspectRatio = widgetAspectRatio;
+          // Save cropped size of preview, which is displayed in this widget.
+          _previewWidth = fitHeight ? cameraHeight / widgetAspectRatio : cameraWidth;
+          _previewHeight = fitHeight ? cameraHeight : cameraWidth * widgetAspectRatio;
 
           return SizedBox(
             width: width,
@@ -278,15 +287,15 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   /// A widget indicating the ROI as an overlay.
   ///
-  /// The overlay exists of four corners pieces of a square.
-  Widget _getCameraOverlay(double size, double vPosition) {
+  /// The overlay exists of four corner pieces forming a square.
+  Widget _getCameraOverlay(double size, double vOffset) {
     // Color and thickness of the overlay.
-    final defaultLine = BorderSide(color: Colors.white, width: 3);
+    const defaultLine = BorderSide(color: Colors.white, width: 3);
     // Size of a corner piece.
     final lineLength = size * 0.1;
     return Center(
       child: Container(
-        margin: EdgeInsets.only(bottom: vPosition),
+        margin: EdgeInsets.only(bottom: vOffset),
         height: size,
         width: size,
         child: Stack(
@@ -294,7 +303,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
             Align(
               alignment: Alignment.center,
               // Display loading indicator while taking a picture.
-              child: _isTakingPicture ? CircularProgressIndicator() : Container(),
+              child: _isTakingPicture ? const CircularProgressIndicator() : Container(),
             ),
             Align(
               alignment: Alignment.topLeft,
@@ -369,7 +378,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       child: Align(
         alignment: Alignment.bottomCenter,
         child: ClipRRect(
-          borderRadius: BorderRadius.all(Radius.circular(40)),
+          borderRadius: const BorderRadius.all(Radius.circular(40)),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
@@ -473,9 +482,8 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       // If the picture was taken, extract Sudoku and display it.
       final sudokuFuture = NativeSudokuScannerBridge.extractGridfromRoi(
         image.path,
-        _roiSize,
-        _roiOffset / 2,
-        _cameraWidgetAspectRatio,
+        (_roiSize * _previewWidth).toInt(),
+        (_roiOffset * _previewHeight).toInt(),
       );
 
       _showSudokuGrid(sudokuFuture);
