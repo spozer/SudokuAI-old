@@ -13,6 +13,7 @@ class SudokuView extends StatefulWidget {
 
 /// A widget that only displays the extracted sudoku grid (not interactable).
 class _SudokuViewState extends State<SudokuView> {
+  final _buttonPrimaryColor = const Color.fromARGB(255, 102, 102, 102);
   late List<SudokuGridItem> sudokuGrid;
   int? selectedId;
 
@@ -48,8 +49,18 @@ class _SudokuViewState extends State<SudokuView> {
     final topBarOffset = screenHeight * 0.01;
     final sudokuGridOffset = 2 * topBarOffset + topBarHeight;
     final sudokuGridSize = screenWidth * 0.95;
-    final numberKeyboardSize = screenWidth * 0.5;
-    final numberKeyboardOffset = screenHeight * 0.05;
+    var numberKeyboardSize = screenWidth * 0.5;
+    var numberKeyboardOffset = screenHeight * 0.05;
+
+    // Check for overflow of number keyboard.
+    if (statusBarHeight + sudokuGridOffset + sudokuGridSize + numberKeyboardSize + numberKeyboardOffset >
+        screenHeight) {
+      numberKeyboardSize = screenWidth * 0.45;
+      numberKeyboardOffset = screenHeight * 0.02;
+    }
+
+    final deleteButtonYOffset = numberKeyboardOffset + numberKeyboardSize * 0.05;
+    final deleteButtonXOffset = numberKeyboardSize + screenWidth * 0.2;
 
     return WillPopScope(
       // Disable back button.
@@ -60,6 +71,7 @@ class _SudokuViewState extends State<SudokuView> {
             _getTopBar(topBarHeight, topBarWidth, statusBarHeight + topBarOffset),
             _getSudokuGrid(sudokuGridSize, statusBarHeight + sudokuGridOffset),
             _getNumberKeyboard(numberKeyboardSize, numberKeyboardOffset),
+            _getDeleteButton(deleteButtonYOffset, deleteButtonXOffset),
           ],
         ),
       ),
@@ -71,7 +83,7 @@ class _SudokuViewState extends State<SudokuView> {
   Widget _getTopBar(double height, double width, double offset) {
     final buttonStyle = ElevatedButton.styleFrom(
       elevation: 5,
-      primary: const Color.fromARGB(255, 102, 102, 102),
+      primary: _buttonPrimaryColor,
       shadowColor: Colors.black,
     );
     return Padding(
@@ -223,7 +235,7 @@ class _SudokuViewState extends State<SudokuView> {
       padding: EdgeInsets.only(bottom: offset),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: Container(
+        child: SizedBox(
           width: size,
           height: size,
           child: GridView.count(
@@ -239,18 +251,10 @@ class _SudokuViewState extends State<SudokuView> {
               return ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   elevation: 5,
-                  primary: const Color.fromARGB(255, 102, 102, 102),
+                  primary: _buttonPrimaryColor,
                   shadowColor: Colors.black,
                 ),
-                onPressed: () {
-                  if (selectedId != null) {
-                    if (mounted) {
-                      setState(() {
-                        sudokuGrid[selectedId!].value = value;
-                      });
-                    }
-                  }
-                },
+                onPressed: () => _setValueOnSelectedGridItem(value),
                 child: Text(
                   value.toString(),
                   style: const TextStyle(
@@ -263,6 +267,34 @@ class _SudokuViewState extends State<SudokuView> {
         ),
       ),
     );
+  }
+
+  /// Creates a delete button.
+  Widget _getDeleteButton(double yOffset, double xOffset) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: yOffset, left: xOffset),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: GestureDetector(
+          onTap: () => _setValueOnSelectedGridItem(0),
+          child: const Icon(
+            Icons.backspace,
+            size: 35.0,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Changes the value of the currently selected grid item.
+  void _setValueOnSelectedGridItem(int value) {
+    if (selectedId != null) {
+      if (mounted) {
+        setState(() {
+          sudokuGrid[selectedId!].value = value;
+        });
+      }
+    }
   }
 }
 
@@ -309,6 +341,7 @@ class SudokuGridItem {
   }
 
   set value(int value) {
+    assert(0 <= value && value < 10);
     if (isModifiable) _value = value;
   }
 }
