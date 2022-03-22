@@ -1,9 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/services.dart';
-import 'package:path/path.dart';
-import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
+import 'camera_view.dart';
 
 class SudokuView extends StatefulWidget {
   final List<int> sudokuGrid;
@@ -40,13 +37,72 @@ class _SudokuViewState extends State<SudokuView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Sudoku')),
-      body: Stack(
-        children: <Widget>[
-          _getSudokuGrid(),
-          _getNumberKeyboard(),
-        ],
+    // Get screen height and width (in logical pixels).
+    final double screenHeight = MediaQuery.of(context).size.height;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double statusBarHeight = MediaQuery.of(context).padding.top;
+
+    // Define widget sizes which are scaled by the screen size.
+    final topBarHeight = screenHeight * 0.06;
+    final topBarWidth = screenWidth * 0.95;
+    final topBarOffset = screenHeight * 0.01;
+    final sudokuGridOffset = 2 * topBarOffset + topBarHeight;
+    final sudokuGridSize = screenWidth * 0.95;
+    final numberKeyboardSize = screenWidth * 0.5;
+    final numberKeyboardOffset = screenHeight * 0.05;
+
+    return WillPopScope(
+      // Disable back button.
+      onWillPop: () async => false,
+      child: Scaffold(
+        body: Stack(
+          children: <Widget>[
+            _getTopBar(topBarHeight, topBarWidth, statusBarHeight + topBarOffset),
+            _getSudokuGrid(sudokuGridSize, statusBarHeight + sudokuGridOffset),
+            _getNumberKeyboard(numberKeyboardSize, numberKeyboardOffset),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Creates the top bar, which contains a button to take a new image and a
+  // button to solve the currently displayed Sudoku.
+  Widget _getTopBar(double height, double width, double offset) {
+    final buttonStyle = ElevatedButton.styleFrom(
+      elevation: 5,
+      primary: const Color.fromARGB(255, 102, 102, 102),
+      shadowColor: Colors.black,
+    );
+    return Padding(
+      padding: EdgeInsets.only(top: offset),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          height: height,
+          width: width,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ElevatedButton.icon(
+                style: buttonStyle,
+                onPressed: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => const CameraView(),
+                  ),
+                ),
+                icon: const Icon(Icons.camera_alt),
+                label: const Text("New"),
+              ),
+              ElevatedButton(
+                style: buttonStyle,
+                // TODO: solve Sudoku grid
+                onPressed: () {},
+                child: const Text("Solution"),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -84,96 +140,126 @@ class _SudokuViewState extends State<SudokuView> {
   }
 
   /// Creates the Sudoku grid widget.
-  Widget _getSudokuGrid() {
+  Widget _getSudokuGrid(double size, double offset) {
     return Padding(
-      padding: const EdgeInsets.all(10.0),
-      child: Container(
-        padding: const EdgeInsets.all(10.0),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.all(Radius.circular(10)),
-          border: Border.all(),
-        ),
-        child: GridView.count(
-          shrinkWrap: true,
-          primary: false,
-          addAutomaticKeepAlives: false,
-          crossAxisCount: 9,
-          children: sudokuGrid.map((element) {
-            final id = element.id;
-            final row = element.row;
-            final col = element.col;
-            final isModifiable = element.isModifiable;
-            final value = element.value;
+      padding: EdgeInsets.only(top: offset),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Container(
+          width: size,
+          height: size,
+          padding: EdgeInsets.all(size * 0.025),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.all(Radius.circular(10)),
+            border: Border.all(),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black,
+                blurRadius: 15,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: GridView.count(
+            padding: EdgeInsets.zero,
+            shrinkWrap: true,
+            primary: false,
+            addAutomaticKeepAlives: false,
+            crossAxisCount: 9,
+            // physics: const NeverScrollableScrollPhysics(),
+            children: sudokuGrid.map((element) {
+              final id = element.id;
+              final row = element.row;
+              final col = element.col;
+              final isModifiable = element.isModifiable;
+              final value = element.value;
 
-            return GestureDetector(
-              onTap: () {
-                if (mounted) {
-                  setState(() {
-                    selectedId = id;
-                  });
-                }
-              },
-              child: Container(
-                  decoration: BoxDecoration(
-                    color: _getColor(element),
-                    border: Border(
-                      left: (col == 0) ? const BorderSide(width: 3.0) : BorderSide.none,
-                      right: BorderSide(
-                        width: (col % 3 == 2 || col == 8) ? 3.0 : 0.5,
-                      ),
-                      top: (row == 0) ? const BorderSide(width: 3.0) : BorderSide.none,
-                      bottom: BorderSide(
-                        width: (row % 3 == 2 || row == 8) ? 3.0 : 0.5,
+              return GestureDetector(
+                onTap: () {
+                  if (mounted) {
+                    setState(() {
+                      selectedId = id;
+                    });
+                  }
+                },
+                child: Container(
+                    decoration: BoxDecoration(
+                      color: _getColor(element),
+                      border: Border(
+                        left: (col == 0) ? const BorderSide(width: 3.0) : BorderSide.none,
+                        right: BorderSide(
+                          width: (col % 3 == 2 || col == 8) ? 3.0 : 0.5,
+                        ),
+                        top: (row == 0) ? const BorderSide(width: 3.0) : BorderSide.none,
+                        bottom: BorderSide(
+                          width: (row % 3 == 2 || row == 8) ? 3.0 : 0.5,
+                        ),
                       ),
                     ),
-                  ),
-                  child: (value != 0)
-                      ? FittedBox(
-                          fit: BoxFit.contain,
-                          child: Text(
-                            value.toString(),
-                            style: TextStyle(color: isModifiable ? Colors.blue[900] : Colors.black),
-                          ),
-                        )
-                      : null),
-            );
-          }).toList(),
+                    child: (value != 0)
+                        ? FittedBox(
+                            fit: BoxFit.contain,
+                            child: Text(
+                              value.toString(),
+                              style: TextStyle(
+                                color: isModifiable ? Colors.blue[900] : Colors.black,
+                                fontWeight: isModifiable ? FontWeight.normal : FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        : null),
+              );
+            }).toList(),
+          ),
         ),
       ),
     );
   }
 
   /// Creates the number keyboard.
-  Widget _getNumberKeyboard() {
+  Widget _getNumberKeyboard(double size, double offset) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 50.0),
+      padding: EdgeInsets.only(bottom: offset),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: GridView.count(
-          padding: const EdgeInsets.only(left: 10.0, right: 10.0),
-          shrinkWrap: true,
-          primary: false,
-          addAutomaticKeepAlives: false,
-          crossAxisCount: 9,
-          children: List.generate(9, (index) {
-            int value = index + 1;
-            return GestureDetector(
-              onTap: () {
-                if (selectedId != null) {
-                  if (mounted) {
-                    setState(() {
-                      sudokuGrid[selectedId!].value = value;
-                    });
+        child: Container(
+          width: size,
+          height: size,
+          child: GridView.count(
+            padding: EdgeInsets.zero,
+            shrinkWrap: true,
+            primary: false,
+            addAutomaticKeepAlives: false,
+            crossAxisCount: 3,
+            mainAxisSpacing: 8.0,
+            crossAxisSpacing: 8.0,
+            children: List.generate(9, (index) {
+              int value = index + 1;
+              return ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  elevation: 5,
+                  primary: const Color.fromARGB(255, 102, 102, 102),
+                  shadowColor: Colors.black,
+                ),
+                onPressed: () {
+                  if (selectedId != null) {
+                    if (mounted) {
+                      setState(() {
+                        sudokuGrid[selectedId!].value = value;
+                      });
+                    }
                   }
-                }
-              },
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: Text(value.toString()),
-              ),
-            );
-          }),
+                },
+                child: Text(
+                  value.toString(),
+                  style: const TextStyle(
+                    fontSize: 30.0,
+                  ),
+                ),
+              );
+            }),
+          ),
         ),
       ),
     );

@@ -13,12 +13,7 @@ import 'sudoku_view.dart';
 
 /// The main widget for taking pictures.
 class CameraView extends StatefulWidget {
-  const CameraView({
-    Key? key,
-    required this.camera,
-  }) : super(key: key);
-
-  final CameraDescription camera;
+  const CameraView({Key? key}) : super(key: key);
 
   @override
   _CameraViewState createState() => _CameraViewState();
@@ -28,6 +23,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
 
+  late Future<CameraDescription> camera;
   // Offset percentage from center to top.
   late double _roiOffset;
   // Percentage, based off of overlay size.
@@ -50,9 +46,18 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+
+    // Get main back facing camera.
+    camera = availableCameras().then((value) {
+      return value.firstWhere(
+        (CameraDescription camera) => camera.lensDirection == CameraLensDirection.back,
+      );
+    });
+
     _getCameraPermission().then((_) {
       _initCamera();
     });
+
     WidgetsBinding.instance?.addObserver(this);
   }
 
@@ -90,21 +95,21 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     // Get screen height and width (in logical pixels).
-    double screenHeight = MediaQuery.of(context).size.height;
-    double screenWidth = MediaQuery.of(context).size.width;
+    final double screenHeight = MediaQuery.of(context).size.height;
+    final double screenWidth = MediaQuery.of(context).size.width;
 
     // Define widget sizes which are scaled by the screen size.
     final bottomBarHeight = screenHeight * 0.15;
     final bottomBarWidth = screenWidth * 0.9;
     final bottomBarOffset = screenHeight * 0.03;
-    final overlayOffset = bottomBarOffset + bottomBarHeight;
+    final overlayOffset = 0.5 * (bottomBarOffset + bottomBarHeight);
     final overlaySize = screenWidth * 0.7;
 
     // Define Region Of Interest (ROI) based on camera overlay.
     // It is expected that the user tries to place the Sudoku grid
     // inside this region.
     // Offset from center in [-height / 2, height / 2].
-    _roiOffset = -0.5 * (overlayOffset / screenHeight); // -0.09;
+    _roiOffset = -overlayOffset / screenHeight; // -0.09;
     _roiSize = (1.0 + (overlaySize / screenWidth)) / 2;
 
     // Main widget existing of the camera preview, the ROI indicator overlay,
@@ -186,7 +191,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // create a CameraController.
     _controller = CameraController(
       // Get a specific camera from the list of available cameras.
-      widget.camera,
+      await camera,
       // Define the resolution to use.
       // Better to use 1280x720 because the flutter camera plugin just
       // doesn't recognize higher resolutions, even though the resulting
@@ -295,50 +300,52 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // Size of a corner piece.
     final lineLength = size * 0.1;
     return Center(
-      child: Container(
-        margin: EdgeInsets.only(bottom: vOffset),
-        height: size,
-        width: size,
-        child: Stack(
-          children: <Widget>[
-            Align(
-              alignment: Alignment.center,
-              // Display loading indicator while taking a picture.
-              child: _isTakingPicture ? const CircularProgressIndicator() : Container(),
-            ),
-            Align(
-              alignment: Alignment.topLeft,
-              child: _makeOverlayCorner(
-                lineLength,
-                top: defaultLine,
-                left: defaultLine,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: 2 * vOffset),
+        child: SizedBox(
+          height: size,
+          width: size,
+          child: Stack(
+            children: <Widget>[
+              Align(
+                alignment: Alignment.center,
+                // Display loading indicator while taking a picture.
+                child: _isTakingPicture ? const CircularProgressIndicator() : Container(),
               ),
-            ),
-            Align(
-              alignment: Alignment.topRight,
-              child: _makeOverlayCorner(
-                lineLength,
-                top: defaultLine,
-                right: defaultLine,
+              Align(
+                alignment: Alignment.topLeft,
+                child: _makeOverlayCorner(
+                  lineLength,
+                  top: defaultLine,
+                  left: defaultLine,
+                ),
               ),
-            ),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: _makeOverlayCorner(
-                lineLength,
-                bottom: defaultLine,
-                left: defaultLine,
+              Align(
+                alignment: Alignment.topRight,
+                child: _makeOverlayCorner(
+                  lineLength,
+                  top: defaultLine,
+                  right: defaultLine,
+                ),
               ),
-            ),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: _makeOverlayCorner(
-                lineLength,
-                bottom: defaultLine,
-                right: defaultLine,
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: _makeOverlayCorner(
+                  lineLength,
+                  bottom: defaultLine,
+                  left: defaultLine,
+                ),
               ),
-            )
-          ],
+              Align(
+                alignment: Alignment.bottomRight,
+                child: _makeOverlayCorner(
+                  lineLength,
+                  bottom: defaultLine,
+                  right: defaultLine,
+                ),
+              )
+            ],
+          ),
         ),
       ),
     );
@@ -520,40 +527,18 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     }
   }
 
-  void _showPicture(String imagePath) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => PictureView(
-          // Pass the automatically generated path to
-          // the PictureView widget.
-          imagePath: imagePath,
-        ),
-      ),
-    );
-  }
-
   /// Present next view.
   void _showSudokuGrid(Future<List<int>> sudokuFuture) async {
     final sudokuGrid = await sudokuFuture;
 
-    _openNewPage(SudokuView(
-      // Pass the automatically generated path to
-      // the SudokuGrid widget.
-      sudokuGrid: sudokuGrid,
-    ));
-  }
-
-  /// Opens new page on top of this one.
-  void _openNewPage(Widget widget) async {
-    // We don't need camera anymore.
-    _closeCamera();
-
-    await Navigator.of(context).push(
+    Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => widget,
+        builder: (context) => SudokuView(
+          // Pass the automatically generated path to
+          // the SudokuGrid widget.
+          sudokuGrid: sudokuGrid,
+        ),
       ),
     );
-
-    if (!_isCameraInitialized) _initCamera();
   }
 }

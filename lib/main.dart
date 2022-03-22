@@ -14,7 +14,10 @@ void main() async {
   // Hide Status Bar
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
-    overlays: [SystemUiOverlay.bottom],
+    overlays: [
+      SystemUiOverlay.top,
+      SystemUiOverlay.bottom,
+    ],
   );
 
   // Disable screen rotation
@@ -23,21 +26,11 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Obtain a list of the available cameras on the device.
-  final cameras = await availableCameras();
-
-  // Get a specific camera from the list of available cameras.
-  final firstCamera = cameras.firstWhere(
-    (CameraDescription camera) => camera.lensDirection == CameraLensDirection.back,
-  );
-
   runApp(MaterialApp(
     theme: ThemeData(
       brightness: Brightness.dark,
       visualDensity: VisualDensity.adaptivePlatformDensity,
     ),
-    home: CameraView(
-      camera: firstCamera,
-    ),
+    home: const CameraView(),
   ));
 }
