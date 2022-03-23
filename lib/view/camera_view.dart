@@ -7,8 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
-import 'package:sudokuai/view/sudoku_view.dart';
-import 'picture_view.dart';
 import 'sudoku_view.dart';
 
 /// The main widget for taking pictures.
@@ -42,6 +40,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   // parameter to check the actual state.
   bool _isCameraInitialized = false;
   bool _isCameraAccessGranted = false;
+  bool _isCameraDisabled = false;
 
   @override
   void initState() {
@@ -82,7 +81,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       debugPrint("CameraView state changed to resumed");
       // Resume with last state of camera flash.
-      _initCamera(flashOn: _wasFlashOn);
+      if (!_isCameraDisabled) _initCamera(flashOn: _wasFlashOn);
     } else if (state == AppLifecycleState.paused) {
       // Make sure the current [CameraController] gets disposed of cleanly.
       debugPrint("CameraView state changed to paused");
@@ -508,10 +507,10 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
     try {
       // TODO: maybe implement transition stage which replaces Camera View
-      // Set flash state to default off, or otherwise state gets saved by
-      // App Lifecycle Observer because opening Image Picker (Gallery)
-      // causes app to get paused/resumed.
-      _isFlashOn = false;
+      // Mark camera as disabled for App Lifecycle Observer, because
+      // opening Image Picker (Gallery) causes app to get paused/resumed.
+      _isCameraDisabled = true;
+
       final picker = ImagePicker();
       final image = await picker.pickImage(source: ImageSource.gallery);
 
@@ -519,6 +518,10 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
         final resultBB = await NativeSudokuScannerBridge.detectGrid(image.path);
         final sudokuFuture = NativeSudokuScannerBridge.extractGrid(image.path, resultBB);
         _showSudokuGrid(sudokuFuture);
+      } else {
+        // Back button was pressed.
+        _isCameraDisabled = false;
+        if (!_isCameraInitialized) _initCamera(flashOn: _wasFlashOn);
       }
     } on PlatformException catch (e) {
       // TODO: error handling when picking image fails
