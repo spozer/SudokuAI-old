@@ -58,7 +58,7 @@ class _SudokuViewState extends State<SudokuView> {
       // Disable back button.
       onWillPop: () async => false,
       child: Scaffold(
-        body: Provider.value(
+        body: ChangeNotifierProvider.value(
           value: sudokuGrid,
           child: Stack(
             children: <Widget>[
@@ -274,12 +274,12 @@ class SudokuCellWidget extends StatelessWidget {
       onTap: () => sudokuGrid.select(sudokuCell),
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
-      child: ChangeNotifierProvider.value(
-        value: sudokuCell,
-        builder: (context, child) {
+      child: Selector<SudokuGrid, Status>(
+        selector: (_, sudokuGrid) => sudokuGrid.getCell(row, col).status,
+        builder: (_, status, child) {
           print('$row, $col');
           return Container(
-            color: _getColor(context.select<SudokuGridCell, Status>((cell) => cell.status)),
+            color: _getColor(status),
             padding: const EdgeInsets.all(5),
             child: child,
           );
@@ -296,8 +296,8 @@ class SudokuCellWidget extends StatelessWidget {
                   ),
                 ),
               )
-            : Selector<SudokuGridCell, int>(
-                selector: (_, cell) => cell.value,
+            : Selector<SudokuGrid, int>(
+                selector: (_, sudokuGrid) => sudokuGrid.getCell(row, col).value,
                 builder: (_, value, __) {
                   print("rebuild Text");
                   return (value != 0)

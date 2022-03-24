@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:collection/collection.dart';
 
-class SudokuGrid {
+class SudokuGrid extends ChangeNotifier {
   final List<SudokuGridCell> _cellList;
   late List<List<int>> _unitList;
 
@@ -44,11 +44,14 @@ class SudokuGrid {
     _selectedId = cell.id;
     // Notify new cell's unit of select.
     _notifyUnit(cell.id, Status.inUnit);
+
+    notifyListeners();
   }
 
   void writeSelected(int value) {
     if (_selectedId == null) return;
     _cellList[_selectedId!].value = value;
+    notifyListeners();
   }
 
   void deleteSelected() {
@@ -74,7 +77,7 @@ enum Status {
 /// Defines a Sudoku grid cell.
 ///
 /// Holds [id], [row, col] and [value].
-class SudokuGridCell extends ChangeNotifier {
+class SudokuGridCell {
   final int _id;
   final int _row;
   final int _col;
@@ -103,13 +106,11 @@ class SudokuGridCell extends ChangeNotifier {
     assert(0 <= value && value < 10);
     if (!isModifiable || value == _value) return;
     _value = value;
-    notifyListeners();
   }
 
   set status(Status status) {
     if (status == _status) return;
 
     _status = status;
-    notifyListeners();
   }
 }
