@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:collection/collection.dart';
+import 'package:sudokuai/solver/sudoku_solver.dart';
+import 'package:provider/provider.dart';
+import '../grid/sudoku_grid.dart';
 import 'camera_view.dart';
 
 class SudokuView extends StatefulWidget {
@@ -14,7 +17,7 @@ class SudokuView extends StatefulWidget {
 /// A widget that only displays the extracted sudoku grid (not interactable).
 class _SudokuViewState extends State<SudokuView> {
   final _buttonPrimaryColor = const Color.fromARGB(255, 102, 102, 102);
-  late List<SudokuGridItem> sudokuGrid;
+  late SudokuGrid sudokuGrid;
   int? selectedId;
 
   @override
@@ -22,18 +25,7 @@ class _SudokuViewState extends State<SudokuView> {
     super.initState();
 
     // Create Sudoku grid.
-    sudokuGrid = widget.sudokuGrid.mapIndexed((index, element) {
-      int colNum = index % 9;
-      int rowNum = index ~/ 9;
-
-      return SudokuGridItem(
-        index,
-        rowNum,
-        colNum,
-        value: element,
-        isModifiable: (element == 0),
-      );
-    }).toList();
+    sudokuGrid = SudokuGrid(widget.sudokuGrid);
   }
 
   @override
@@ -66,13 +58,16 @@ class _SudokuViewState extends State<SudokuView> {
       // Disable back button.
       onWillPop: () async => false,
       child: Scaffold(
-        body: Stack(
-          children: <Widget>[
-            _getTopBar(topBarHeight, topBarWidth, statusBarHeight + topBarOffset),
-            _getSudokuGrid(sudokuGridSize, statusBarHeight + sudokuGridOffset),
-            _getNumberKeyboard(numberKeyboardSize, numberKeyboardOffset),
-            _getDeleteButton(deleteButtonYOffset, deleteButtonXOffset),
-          ],
+        body: Provider.value(
+          value: sudokuGrid,
+          child: Stack(
+            children: <Widget>[
+              _getTopBar(topBarHeight, topBarWidth, statusBarHeight + topBarOffset),
+              _getSudokuGrid(sudokuGridSize, statusBarHeight + sudokuGridOffset),
+              _getNumberKeyboard(numberKeyboardSize, numberKeyboardOffset),
+              _getDeleteButton(deleteButtonYOffset, deleteButtonXOffset),
+            ],
+          ),
         ),
       ),
     );
@@ -119,38 +114,6 @@ class _SudokuViewState extends State<SudokuView> {
     );
   }
 
-  /// Get background color of grid item based on the currently selected
-  /// grid item.
-  Color _getColor(SudokuGridItem item) {
-    const defaultBackground = Colors.transparent;
-    const selectedBackground = Color.fromARGB(100, 43, 188, 255);
-    const affectedBackground = Color.fromARGB(100, 150, 150, 150);
-    const sameValueBackground = Color.fromARGB(100, 200, 0, 0);
-
-    // Nothing selected yet.
-    if (selectedId == null) {
-      return defaultBackground;
-    }
-
-    // The selected item.
-    if (selectedId == item.id) {
-      return selectedBackground;
-    }
-
-    // Highlight all items that have same value as currently selected item.
-    if (item.value == sudokuGrid[selectedId!].value && item.value != 0) {
-      return sameValueBackground;
-    }
-
-    // Highlight all items that either are it the same row, column or box of
-    // currently selected item.
-    if (item.isAffectedBy(sudokuGrid[selectedId!])) {
-      return affectedBackground;
-    }
-
-    return defaultBackground;
-  }
-
   /// Creates the Sudoku grid widget.
   Widget _getSudokuGrid(double size, double offset) {
     return Padding(
@@ -173,57 +136,7 @@ class _SudokuViewState extends State<SudokuView> {
               ),
             ],
           ),
-          child: GridView.count(
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            primary: false,
-            addAutomaticKeepAlives: false,
-            crossAxisCount: 9,
-            // physics: const NeverScrollableScrollPhysics(),
-            children: sudokuGrid.map((element) {
-              final id = element.id;
-              final row = element.row;
-              final col = element.col;
-              final isModifiable = element.isModifiable;
-              final value = element.value;
-
-              return GestureDetector(
-                onTap: () {
-                  if (mounted) {
-                    setState(() {
-                      selectedId = id;
-                    });
-                  }
-                },
-                child: Container(
-                    decoration: BoxDecoration(
-                      color: _getColor(element),
-                      border: Border(
-                        left: (col == 0) ? const BorderSide(width: 3.0) : BorderSide.none,
-                        right: BorderSide(
-                          width: (col % 3 == 2 || col == 8) ? 3.0 : 0.5,
-                        ),
-                        top: (row == 0) ? const BorderSide(width: 3.0) : BorderSide.none,
-                        bottom: BorderSide(
-                          width: (row % 3 == 2 || row == 8) ? 3.0 : 0.5,
-                        ),
-                      ),
-                    ),
-                    child: (value != 0)
-                        ? FittedBox(
-                            fit: BoxFit.contain,
-                            child: Text(
-                              value.toString(),
-                              style: TextStyle(
-                                color: isModifiable ? Colors.blue[900] : Colors.black,
-                                fontWeight: isModifiable ? FontWeight.normal : FontWeight.w600,
-                              ),
-                            ),
-                          )
-                        : null),
-              );
-            }).toList(),
-          ),
+          child: const SudokuGridWidget(),
         ),
       ),
     );
@@ -248,19 +161,23 @@ class _SudokuViewState extends State<SudokuView> {
             crossAxisSpacing: 8.0,
             children: List.generate(9, (index) {
               int value = index + 1;
-              return ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  elevation: 5,
-                  primary: _buttonPrimaryColor,
-                  shadowColor: Colors.black,
-                ),
-                onPressed: () => _setValueOnSelectedGridItem(value),
-                child: Text(
-                  value.toString(),
-                  style: const TextStyle(
-                    fontSize: 30.0,
-                  ),
-                ),
+              return Consumer<SudokuGrid>(
+                builder: (_, sudokuGrid, __) {
+                  return ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      elevation: 5,
+                      primary: _buttonPrimaryColor,
+                      shadowColor: Colors.black,
+                    ),
+                    onPressed: () => sudokuGrid.writeSelected(value),
+                    child: Text(
+                      value.toString(),
+                      style: const TextStyle(
+                        fontSize: 30.0,
+                      ),
+                    ),
+                  );
+                },
               );
             }),
           ),
@@ -275,73 +192,150 @@ class _SudokuViewState extends State<SudokuView> {
       padding: EdgeInsets.only(bottom: yOffset, left: xOffset),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: GestureDetector(
-          onTap: () => _setValueOnSelectedGridItem(0),
-          child: const Icon(
-            Icons.backspace,
-            size: 35.0,
-          ),
+        child: Consumer<SudokuGrid>(
+          builder: (_, sudokuGrid, __) {
+            return InkResponse(
+              onTap: () => sudokuGrid.deleteSelected(),
+              highlightColor: Colors.transparent,
+              splashColor: Colors.transparent,
+              child: const Icon(
+                Icons.backspace,
+                size: 35.0,
+              ),
+            );
+          },
         ),
       ),
     );
   }
+}
 
-  /// Changes the value of the currently selected grid item.
-  void _setValueOnSelectedGridItem(int value) {
-    if (selectedId != null) {
-      if (mounted) {
-        setState(() {
-          sudokuGrid[selectedId!].value = value;
-        });
-      }
-    }
+class SudokuGridWidget extends StatelessWidget {
+  const SudokuGridWidget({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    print("rebuild whole sudoku");
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: Table(
+        defaultColumnWidth: const FixedColumnWidth(40.0),
+        border: const TableBorder(
+          left: BorderSide(width: 3.0, color: Colors.black),
+          top: BorderSide(width: 3.0, color: Colors.black),
+        ),
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: _getTableRows(),
+      ),
+    );
+  }
+
+  List<TableRow> _getTableRows() {
+    return List.generate(9, (int rowNumber) {
+      return TableRow(children: _getRow(rowNumber));
+    });
+  }
+
+  List<Widget> _getRow(int rowNumber) {
+    return List.generate(9, (int colNumber) {
+      return Container(
+        height: 40.0,
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(
+              width: (colNumber % 3 == 2) ? 3.0 : 1.0,
+              color: Colors.black,
+            ),
+            bottom: BorderSide(
+              width: (rowNumber % 3 == 2) ? 3.0 : 1.0,
+              color: Colors.black,
+            ),
+          ),
+        ),
+        child: SudokuCellWidget(rowNumber, colNumber),
+      );
+    });
   }
 }
 
-/// Defines a Sudoku grid item.
-///
-/// Holds [id], [row, col] and [value].
-class SudokuGridItem {
-  final int _id;
-  final int _row;
-  final int _col;
-  final bool _isModifiable;
-  int _value;
+class SudokuCellWidget extends StatelessWidget {
+  final int row;
+  final int col;
 
-  SudokuGridItem(this._id, this._row, this._col, {value = 0, isModifiable = true})
-      : _value = value,
-        _isModifiable = isModifiable;
+  const SudokuCellWidget(this.row, this.col, {Key? key}) : super(key: key);
 
-  bool isAffectedBy(SudokuGridItem item) {
-    bool inRow = (_row == item.row);
-    bool inCol = (_col == item.col);
-    bool inBox = (_col ~/ 3 == item.col ~/ 3 && _row ~/ 3 == item.row ~/ 3);
-
-    return (inRow || inCol || inBox);
+  @override
+  Widget build(BuildContext context) {
+    final sudokuGrid = context.read<SudokuGrid>();
+    final sudokuCell = sudokuGrid.getCell(row, col);
+    const fontSize = 20.0;
+    print("whole rebuild of ($row, $col)");
+    return InkResponse(
+      onTap: () => sudokuGrid.select(sudokuCell),
+      highlightColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      child: ChangeNotifierProvider.value(
+        value: sudokuCell,
+        builder: (context, child) {
+          print('$row, $col');
+          return Container(
+            color: _getColor(context.select<SudokuGridCell, Status>((cell) => cell.status)),
+            padding: const EdgeInsets.all(5),
+            child: child,
+          );
+        },
+        child: (!sudokuCell.isModifiable)
+            ? Center(
+                child: Text(
+                  sudokuCell.value.toString(),
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              )
+            : Selector<SudokuGridCell, int>(
+                selector: (_, cell) => cell.value,
+                builder: (_, value, __) {
+                  print("rebuild Text");
+                  return (value != 0)
+                      ? Center(
+                          child: Text(
+                            value.toString(),
+                            style: TextStyle(
+                              color: Colors.blue[900],
+                              fontSize: fontSize,
+                            ),
+                          ),
+                        )
+                      : const SizedBox();
+                },
+              ),
+      ),
+    );
   }
 
-  int get id {
-    return _id;
-  }
+  /// Get background color of grid cell based on the currently selected
+  /// grid cell.
+  Color _getColor(Status status) {
+    const defaultBackground = Colors.transparent;
+    const selectedBackground = Color.fromARGB(100, 43, 188, 255);
+    const unitBackground = Color.fromARGB(100, 150, 150, 150);
+    const sameValueBackground = Color.fromARGB(100, 200, 0, 0);
 
-  int get row {
-    return _row;
-  }
-
-  int get col {
-    return _col;
-  }
-
-  bool get isModifiable {
-    return _isModifiable;
-  }
-
-  int get value {
-    return _value;
-  }
-
-  set value(int value) {
-    assert(0 <= value && value < 10);
-    if (isModifiable) _value = value;
+    switch (status) {
+      case Status.none:
+        return defaultBackground;
+      case Status.selected:
+        return selectedBackground;
+      case Status.inUnit:
+        return unitBackground;
+      case Status.sameValue:
+        return sameValueBackground;
+      default:
+        return defaultBackground;
+    }
   }
 }

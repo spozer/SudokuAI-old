@@ -5,13 +5,13 @@ import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
 import 'view/camera_view.dart';
 
 void main() async {
-  // Ensure that plugin services are initialized
+  // Ensure that plugin services are initialized.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Bridge
+  // Initialize Bridge.
   NativeSudokuScannerBridge.init();
 
-  // Hide Status Bar
+  // Show Status and Navigation Bar.
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
     overlays: [
@@ -20,7 +20,7 @@ void main() async {
     ],
   );
 
-  // Disable screen rotation
+  // Disable screen rotation.
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
