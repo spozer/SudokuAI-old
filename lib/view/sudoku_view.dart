@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:collection/collection.dart';
 import 'package:sudokuai/solver/sudoku_solver.dart';
 import 'package:provider/provider.dart';
 import '../grid/sudoku_grid.dart';
@@ -161,23 +160,19 @@ class _SudokuViewState extends State<SudokuView> {
             crossAxisSpacing: 8.0,
             children: List.generate(9, (index) {
               int value = index + 1;
-              return Consumer<SudokuGrid>(
-                builder: (_, sudokuGrid, __) {
-                  return ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      elevation: 5,
-                      primary: _buttonPrimaryColor,
-                      shadowColor: Colors.black,
-                    ),
-                    onPressed: () => sudokuGrid.writeSelected(value),
-                    child: Text(
-                      value.toString(),
-                      style: const TextStyle(
-                        fontSize: 30.0,
-                      ),
-                    ),
-                  );
-                },
+              return ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  elevation: 5,
+                  primary: _buttonPrimaryColor,
+                  shadowColor: Colors.black,
+                ),
+                onPressed: () => sudokuGrid.writeSelected(value),
+                child: Text(
+                  value.toString(),
+                  style: const TextStyle(
+                    fontSize: 30.0,
+                  ),
+                ),
               );
             }),
           ),
@@ -192,18 +187,14 @@ class _SudokuViewState extends State<SudokuView> {
       padding: EdgeInsets.only(bottom: yOffset, left: xOffset),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: Consumer<SudokuGrid>(
-          builder: (_, sudokuGrid, __) {
-            return InkResponse(
-              onTap: () => sudokuGrid.deleteSelected(),
-              highlightColor: Colors.transparent,
-              splashColor: Colors.transparent,
-              child: const Icon(
-                Icons.backspace,
-                size: 35.0,
-              ),
-            );
-          },
+        child: InkResponse(
+          onTap: () => sudokuGrid.writeSelected(0),
+          highlightColor: Colors.transparent,
+          splashColor: Colors.transparent,
+          child: const Icon(
+            Icons.backspace,
+            size: 35.0,
+          ),
         ),
       ),
     );
@@ -267,15 +258,14 @@ class SudokuCellWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sudokuGrid = context.read<SudokuGrid>();
-    final sudokuCell = sudokuGrid.getCell(row, col);
     const fontSize = 20.0;
     print("whole rebuild of ($row, $col)");
     return InkResponse(
-      onTap: () => sudokuGrid.select(sudokuCell),
+      onTap: () => sudokuGrid.select(row, col),
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
       child: Selector<SudokuGrid, Status>(
-        selector: (_, sudokuGrid) => sudokuGrid.getCell(row, col).status,
+        selector: (_, sudokuGrid) => sudokuGrid.getStatus(row, col),
         builder: (_, status, child) {
           print('$row, $col');
           return Container(
@@ -284,10 +274,10 @@ class SudokuCellWidget extends StatelessWidget {
             child: child,
           );
         },
-        child: (!sudokuCell.isModifiable)
+        child: (!sudokuGrid.isModifiable(row, col))
             ? Center(
                 child: Text(
-                  sudokuCell.value.toString(),
+                  sudokuGrid.getValue(row, col).toString(),
                   style: const TextStyle(
                     color: Colors.black,
                     fontSize: fontSize,
@@ -297,7 +287,7 @@ class SudokuCellWidget extends StatelessWidget {
                 ),
               )
             : Selector<SudokuGrid, int>(
-                selector: (_, sudokuGrid) => sudokuGrid.getCell(row, col).value,
+                selector: (_, sudokuGrid) => sudokuGrid.getValue(row, col),
                 builder: (_, value, __) {
                   print("rebuild Text");
                   return (value != 0)

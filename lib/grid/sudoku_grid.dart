@@ -1,70 +1,121 @@
 import 'package:flutter/material.dart';
-import 'package:collection/collection.dart';
 
 class SudokuGrid extends ChangeNotifier {
-  final List<SudokuGridCell> _cellList;
-  late List<List<int>> _unitList;
+  final List<List<SudokuGridCell>> _cellList;
+  final List<SudokuGridBlock> _blockList;
 
-  int? _selectedId;
+  SudokuGridCell? _selectedCell;
 
   SudokuGrid(List<int> valueList)
       :
         // Create Sudoku grid.
-        _cellList = valueList.mapIndexed((index, element) {
-          int colNum = index % 9;
-          int rowNum = index ~/ 9;
+        _cellList = List.generate(9, (index) {
+          final row = index;
+          return List.generate(9, (index) {
+            final col = index;
+            final id = row * 9 + col;
+            final value = valueList[id];
+            return SudokuGridCell(id, row, col, value);
+          });
+        }),
+        _blockList = List.generate(9, (index) => SudokuGridBlock(index));
 
-          return SudokuGridCell(
-            index,
-            rowNum,
-            colNum,
-            element,
-          );
-        }).toList();
-
-  SudokuGridCell getCell(int row, int col) {
-    final id = row * 9 + col;
-    return _cellList[id];
+  int getValue(int row, int col) {
+    return _cellList[row][col].value;
   }
 
-  void select(SudokuGridCell cell) {
-    int? oldSelectedId = _selectedId;
+  Status getStatus(int row, int col) {
+    return _cellList[row][col].status;
+  }
 
-    _selectedId = cell.id;
+  bool isModifiable(int row, int col) {
+    return _cellList[row][col].isModifiable;
+  }
 
-    if (cell.id == oldSelectedId) return;
+  void setValue(int row, int col, int value) {
+    _cellList[row][col].value = value;
+    notifyListeners();
+  }
 
-    cell.status = Status.selected;
+  void clearBoard() {
+    for (final row in _cellList) {
+      for (final cell in row) {
+        cell.value = 0;
+      }
+    }
+    notifyListeners();
+  }
+
+  void select(int row, int col) {
+    if (_cellList[row][col].id == _selectedCell?.id) return;
+
+    final cell = _cellList[row][col];
+    final oldSelectedCell = _selectedCell;
 
     // Notify old cell and its unit of unselect.
-    if (oldSelectedId != null) {
-      _cellList[oldSelectedId].status = Status.none;
-      _notifyUnit(oldSelectedId, Status.none);
+    if (oldSelectedCell != null) {
+      oldSelectedCell.status = Status.none;
+      _updateUnit(
+        oldSelectedCell.row,
+        oldSelectedCell.col,
+        oldSelectedCell.blockId,
+        (uCell) => uCell.status = Status.none,
+      );
     }
-    _selectedId = cell.id;
-    // Notify new cell's unit of select.
-    _notifyUnit(cell.id, Status.inUnit);
+    // Notify new cell and its unit of select.
+    cell.status = Status.selected;
+    _updateUnit(row, col, cell.blockId,
+        (uCell) => uCell.status = (uCell.value != 0 && uCell.value == cell.value) ? Status.sameValue : Status.inUnit);
 
+    _selectedCell = cell;
     notifyListeners();
   }
 
   void writeSelected(int value) {
-    if (_selectedId == null) return;
-    _cellList[_selectedId!].value = value;
+    if (_selectedCell == null) return;
+    _selectedCell!.value = value;
+    _updateUnit(_selectedCell!.row, _selectedCell!.col, _selectedCell!.blockId, (uCell) {
+      uCell.status = (value != 0 && uCell.value == value) ? Status.sameValue : Status.inUnit;
+    });
     notifyListeners();
   }
 
-  void deleteSelected() {
-    writeSelected(0);
-  }
+  void _updateUnit(int row, int col, int blockId, void Function(SudokuGridCell) update) {
+    // Update row.
+    for (int uCol = 0; uCol < 9; ++uCol) {
+      if (uCol == col) continue;
+      update(_cellList[row][uCol]);
+    }
 
-  void _notifyUnit(int cellId, Status status) {
-    _cellList[5].status = status;
-    // for (int id in _unitList[cellId]) {
-    //   if (id == cellId) break;
-    //   _cellList[id].status = status;
-    // }
+    // Update column.
+    for (int uRow = 0; uRow < 9; ++uRow) {
+      if (uRow == row) continue;
+      update(_cellList[uRow][col]);
+    }
+
+    // Update block.
+    final block = _blockList[blockId];
+    for (final bRow in block.rows) {
+      for (final bCol in block.cols) {
+        if (bRow == row || bCol == col) continue;
+        update(_cellList[bRow][bCol]);
+      }
+    }
   }
+}
+
+class SudokuGridBlock {
+  final int _id;
+  final List<int> _rows;
+  final List<int> _cols;
+
+  SudokuGridBlock(this._id)
+      : _rows = List.generate(3, (index) => (_id ~/ 3) * 3 + index),
+        _cols = List.generate(3, (index) => (_id % 3) * 3 + index);
+
+  int get id => _id;
+  List<int> get rows => _rows;
+  List<int> get cols => _cols;
 }
 
 enum Status {
@@ -110,7 +161,6 @@ class SudokuGridCell {
 
   set status(Status status) {
     if (status == _status) return;
-
     _status = status;
   }
 }
