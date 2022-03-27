@@ -143,7 +143,7 @@ class NativeSudokuScannerBridge {
     // https://github.com/dart-lang/ffi/issues/22
     // https://github.com/dart-lang/sdk/issues/45508
     // Either way it is probably better to free c heap in native code.
-    List<int> gridList = List.from(gridArray.asTypedList(81));
+    List<int> gridList = List.from(gridArray.asTypedList(81), growable: false);
 
     // Free memory.
     malloc.free(pathPointer);
@@ -170,7 +170,7 @@ class NativeSudokuScannerBridge {
     // https://github.com/dart-lang/ffi/issues/22
     // https://github.com/dart-lang/sdk/issues/45508
     // Either way it is probably better to free c heap in native code.
-    List<int> gridList = List.from(gridArray.asTypedList(81));
+    List<int> gridList = List.from(gridArray.asTypedList(81), growable: false);
 
     // Free memory.
     malloc.free(pathPointer);

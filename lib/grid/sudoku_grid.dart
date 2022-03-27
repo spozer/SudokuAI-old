@@ -5,6 +5,7 @@ class SudokuGrid extends ChangeNotifier {
   final List<SudokuGridBlock> _blockList;
 
   SudokuGridCell? _selectedCell;
+  static int _emptyCount = 0;
 
   SudokuGrid(List<int> valueList)
       :
@@ -15,10 +16,11 @@ class SudokuGrid extends ChangeNotifier {
             final col = index;
             final id = row * 9 + col;
             final value = valueList[id];
+            if (value == 0) _emptyCount++;
             return SudokuGridCell(id, row, col, value);
-          });
+          }, growable: false);
         }),
-        _blockList = List.generate(9, (index) => SudokuGridBlock(index));
+        _blockList = List.generate(9, (index) => SudokuGridBlock(index), growable: false);
 
   int getValue(int row, int col) {
     return _cellList[row][col].value;
@@ -72,11 +74,20 @@ class SudokuGrid extends ChangeNotifier {
   }
 
   void writeSelected(int value) {
-    if (_selectedCell == null) return;
+    if (_selectedCell == null || !_selectedCell!.isModifiable || _selectedCell!.value == value) return;
+
+    if (_selectedCell!.value == 0) {
+      _emptyCount--;
+    } else if (value == 0) {
+      _emptyCount++;
+    }
+
     _selectedCell!.value = value;
     _updateUnit(_selectedCell!.row, _selectedCell!.col, _selectedCell!.blockId, (uCell) {
       uCell.status = (value != 0 && uCell.value == value) ? Status.sameValue : Status.inUnit;
     });
+
+    if (_emptyCount == 0 && _checkWinCondition()) print("WIN");
     notifyListeners();
   }
 
@@ -101,6 +112,47 @@ class SudokuGrid extends ChangeNotifier {
         update(_cellList[bRow][bCol]);
       }
     }
+  }
+
+  bool _checkWinCondition() {
+    Set digits;
+
+    // Check rows.
+    for (int row = 0; row < 9; ++row) {
+      digits = <int>{};
+      for (int col = 0; col < 9; ++col) {
+        if (!digits.add(_cellList[row][col].value)) {
+          print('Duplicate in: $row, $col');
+          return false;
+        }
+      }
+    }
+
+    // Check columns.
+    for (int col = 0; col < 9; ++col) {
+      digits = <int>{};
+      for (int row = 0; row < 9; ++row) {
+        if (!digits.add(_cellList[row][col].value)) {
+          print('Duplicate in: $row, $col');
+          return false;
+        }
+      }
+    }
+
+    // Check blocks.
+    for (final block in _blockList) {
+      digits = <int>{};
+      for (final bRow in block.rows) {
+        for (final bCol in block.cols) {
+          if (!digits.add(_cellList[bRow][bCol].value)) {
+            print('Duplicate in: $bRow, $bCol');
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
   }
 }
 
