@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
+enum BoardStatus {
+  inProgress,
+  solved,
+  hasErrors,
+}
+
 class SudokuGrid extends ChangeNotifier {
   final List<List<SudokuGridCell>> _cellList;
   final List<SudokuGridBlock> _blockList;
 
   SudokuGridCell? _selectedCell;
   static int _emptyCount = 0;
+  BoardStatus _status = BoardStatus.inProgress;
 
   SudokuGrid(List<int> valueList)
       :
@@ -26,12 +33,16 @@ class SudokuGrid extends ChangeNotifier {
     return _cellList[row][col].value;
   }
 
-  Status getStatus(int row, int col) {
+  CellStatus getCellStatus(int row, int col) {
     return _cellList[row][col].status;
   }
 
   bool isModifiable(int row, int col) {
     return _cellList[row][col].isModifiable;
+  }
+
+  BoardStatus getBoardStatus() {
+    return _status;
   }
 
   void setValue(int row, int col, int value) {
@@ -56,18 +67,22 @@ class SudokuGrid extends ChangeNotifier {
 
     // Notify old cell and its unit of unselect.
     if (oldSelectedCell != null) {
-      oldSelectedCell.status = Status.none;
+      oldSelectedCell.status = CellStatus.none;
       _updateUnit(
         oldSelectedCell.row,
         oldSelectedCell.col,
         oldSelectedCell.blockId,
-        (uCell) => uCell.status = Status.none,
+        (uCell) => uCell.status = CellStatus.none,
       );
     }
     // Notify new cell and its unit of select.
-    cell.status = Status.selected;
-    _updateUnit(row, col, cell.blockId,
-        (uCell) => uCell.status = (uCell.value != 0 && uCell.value == cell.value) ? Status.sameValue : Status.inUnit);
+    cell.status = CellStatus.selected;
+    _updateUnit(
+        row,
+        col,
+        cell.blockId,
+        (uCell) =>
+            uCell.status = (uCell.value != 0 && uCell.value == cell.value) ? CellStatus.sameValue : CellStatus.inUnit);
 
     _selectedCell = cell;
     notifyListeners();
@@ -79,15 +94,17 @@ class SudokuGrid extends ChangeNotifier {
     if (_selectedCell!.value == 0) {
       _emptyCount--;
     } else if (value == 0) {
+      if (_emptyCount == 0) _status = BoardStatus.inProgress;
       _emptyCount++;
     }
 
     _selectedCell!.value = value;
     _updateUnit(_selectedCell!.row, _selectedCell!.col, _selectedCell!.blockId, (uCell) {
-      uCell.status = (value != 0 && uCell.value == value) ? Status.sameValue : Status.inUnit;
+      uCell.status = (value != 0 && uCell.value == value) ? CellStatus.sameValue : CellStatus.inUnit;
     });
 
-    if (_emptyCount == 0 && _checkWinCondition()) print("WIN");
+    if (_emptyCount == 0) _status = _checkWinCondition() ? BoardStatus.solved : BoardStatus.hasErrors;
+
     notifyListeners();
   }
 
@@ -122,7 +139,7 @@ class SudokuGrid extends ChangeNotifier {
       digits = <int>{};
       for (int col = 0; col < 9; ++col) {
         if (!digits.add(_cellList[row][col].value)) {
-          print('Duplicate in: $row, $col');
+          debugPrint('Duplicate in: $row, $col');
           return false;
         }
       }
@@ -133,7 +150,7 @@ class SudokuGrid extends ChangeNotifier {
       digits = <int>{};
       for (int row = 0; row < 9; ++row) {
         if (!digits.add(_cellList[row][col].value)) {
-          print('Duplicate in: $row, $col');
+          debugPrint('Duplicate in: $row, $col');
           return false;
         }
       }
@@ -145,7 +162,7 @@ class SudokuGrid extends ChangeNotifier {
       for (final bRow in block.rows) {
         for (final bCol in block.cols) {
           if (!digits.add(_cellList[bRow][bCol].value)) {
-            print('Duplicate in: $bRow, $bCol');
+            debugPrint('Duplicate in: $bRow, $bCol');
             return false;
           }
         }
@@ -170,7 +187,7 @@ class SudokuGridBlock {
   List<int> get cols => _cols;
 }
 
-enum Status {
+enum CellStatus {
   none,
   selected,
   inUnit,
@@ -187,7 +204,7 @@ class SudokuGridCell {
   final int _blockId;
   final bool _isModifiable;
   int _value;
-  Status _status = Status.none;
+  CellStatus _status = CellStatus.none;
 
   SudokuGridCell(this._id, this._row, this._col, this._value)
       : _isModifiable = (_value == 0),
@@ -203,7 +220,7 @@ class SudokuGridCell {
   int get blockId => _blockId;
   bool get isModifiable => _isModifiable;
   int get value => _value;
-  Status get status => _status;
+  CellStatus get status => _status;
 
   set value(int value) {
     assert(0 <= value && value < 10);
@@ -211,7 +228,7 @@ class SudokuGridCell {
     _value = value;
   }
 
-  set status(Status status) {
+  set status(CellStatus status) {
     if (status == _status) return;
     _status = status;
   }

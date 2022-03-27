@@ -100,6 +100,40 @@ class _SudokuViewState extends State<SudokuView> {
                 icon: const Icon(Icons.camera_alt),
                 label: const Text("New"),
               ),
+              Selector<SudokuGrid, BoardStatus>(
+                  selector: (_, sudokuGrid) => sudokuGrid.getBoardStatus(),
+                  builder: (_, boardStatus, __) {
+                    debugPrint("rebuild Solved info text");
+                    Color? color;
+                    IconData icon;
+                    String text;
+
+                    switch (boardStatus) {
+                      case BoardStatus.inProgress:
+                        return const SizedBox();
+                      case BoardStatus.solved:
+                        color = Colors.green[600];
+                        icon = Icons.check;
+                        text = " Solved";
+                        break;
+                      case BoardStatus.hasErrors:
+                        color = Colors.red[600];
+                        icon = Icons.close;
+                        text = " Wrong";
+                        break;
+                    }
+                    return Container(
+                      padding: const EdgeInsets.all(7.0),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: const BorderRadius.all(Radius.circular(5)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: <Widget>[Icon(icon), Text(text)],
+                      ),
+                    );
+                  }),
               ElevatedButton(
                 style: buttonStyle,
                 // TODO: solve Sudoku grid
@@ -127,7 +161,7 @@ class _SudokuViewState extends State<SudokuView> {
             color: Colors.white,
             borderRadius: const BorderRadius.all(Radius.circular(10)),
             border: Border.all(),
-            boxShadow: [
+            boxShadow: const <BoxShadow>[
               BoxShadow(
                 color: Colors.black,
                 blurRadius: 15,
@@ -206,7 +240,7 @@ class SudokuGridWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print("rebuild whole sudoku");
+    debugPrint("rebuild whole sudoku grid");
     return FittedBox(
       fit: BoxFit.contain,
       child: Table(
@@ -259,15 +293,15 @@ class SudokuCellWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final sudokuGrid = context.read<SudokuGrid>();
     const fontSize = 20.0;
-    print("whole rebuild of ($row, $col)");
+    debugPrint("whole rebuild of ($row, $col)");
     return InkResponse(
       onTap: () => sudokuGrid.select(row, col),
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
-      child: Selector<SudokuGrid, Status>(
-        selector: (_, sudokuGrid) => sudokuGrid.getStatus(row, col),
+      child: Selector<SudokuGrid, CellStatus>(
+        selector: (_, sudokuGrid) => sudokuGrid.getCellStatus(row, col),
         builder: (_, status, child) {
-          print('$row, $col');
+          debugPrint('container rebuild of ($row, $col)');
           return Container(
             color: _getColor(status),
             padding: const EdgeInsets.all(5),
@@ -288,8 +322,8 @@ class SudokuCellWidget extends StatelessWidget {
               )
             : Selector<SudokuGrid, int>(
                 selector: (_, sudokuGrid) => sudokuGrid.getValue(row, col),
-                builder: (_, value, __) {
-                  print("rebuild Text");
+                builder: (_, value, child) {
+                  debugPrint("text rebuild of ($row, $col)");
                   return (value != 0)
                       ? Center(
                           child: Text(
@@ -301,28 +335,27 @@ class SudokuCellWidget extends StatelessWidget {
                           ),
                         )
                       : const SizedBox();
-                },
-              ),
+                }),
       ),
     );
   }
 
   /// Get background color of grid cell based on the currently selected
   /// grid cell.
-  Color _getColor(Status status) {
+  Color _getColor(CellStatus status) {
     const defaultBackground = Colors.transparent;
     const selectedBackground = Color.fromARGB(100, 43, 188, 255);
     const unitBackground = Color.fromARGB(100, 150, 150, 150);
     const sameValueBackground = Color.fromARGB(100, 200, 0, 0);
 
     switch (status) {
-      case Status.none:
+      case CellStatus.none:
         return defaultBackground;
-      case Status.selected:
+      case CellStatus.selected:
         return selectedBackground;
-      case Status.inUnit:
+      case CellStatus.inUnit:
         return unitBackground;
-      case Status.sameValue:
+      case CellStatus.sameValue:
         return sameValueBackground;
       default:
         return defaultBackground;
