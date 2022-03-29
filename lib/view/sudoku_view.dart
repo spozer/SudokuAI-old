@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sudokuai/solver/sudoku_solver.dart';
 import 'package:provider/provider.dart';
 import '../grid/sudoku_grid.dart';
 import 'camera_view.dart';
@@ -50,8 +49,8 @@ class _SudokuViewState extends State<SudokuView> {
       numberKeyboardOffset = screenHeight * 0.02;
     }
 
-    final deleteButtonYOffset = numberKeyboardOffset + numberKeyboardSize * 0.05;
-    final deleteButtonXOffset = numberKeyboardSize + screenWidth * 0.2;
+    final deleteButtonYOffset = numberKeyboardOffset + numberKeyboardSize * 0.04;
+    final deleteButtonXOffset = numberKeyboardSize + screenWidth * 0.22;
 
     return WillPopScope(
       // Disable back button.
@@ -64,7 +63,7 @@ class _SudokuViewState extends State<SudokuView> {
               _getTopBar(topBarHeight, topBarWidth, statusBarHeight + topBarOffset),
               _getSudokuGrid(sudokuGridSize, statusBarHeight + sudokuGridOffset),
               _getNumberKeyboard(numberKeyboardSize, numberKeyboardOffset),
-              _getDeleteButton(deleteButtonYOffset, deleteButtonXOffset),
+              _getActionButtons(deleteButtonYOffset, deleteButtonXOffset),
             ],
           ),
         ),
@@ -156,12 +155,12 @@ class _SudokuViewState extends State<SudokuView> {
         child: Container(
           width: size,
           height: size,
-          padding: EdgeInsets.all(size * 0.025),
-          decoration: BoxDecoration(
+          padding: EdgeInsets.all(size * 0.02),
+          decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: const BorderRadius.all(Radius.circular(10)),
-            border: Border.all(),
-            boxShadow: const <BoxShadow>[
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            // border: Border.all(),
+            boxShadow: <BoxShadow>[
               BoxShadow(
                 color: Colors.black,
                 blurRadius: 15,
@@ -215,20 +214,35 @@ class _SudokuViewState extends State<SudokuView> {
     );
   }
 
-  /// Creates a delete button.
-  Widget _getDeleteButton(double yOffset, double xOffset) {
+  /// Creates action buttons.
+  Widget _getActionButtons(double yOffset, double xOffset) {
     return Padding(
       padding: EdgeInsets.only(bottom: yOffset, left: xOffset),
       child: Align(
         alignment: Alignment.bottomCenter,
-        child: InkResponse(
-          onTap: () => sudokuGrid.writeSelected(0),
-          highlightColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          child: const Icon(
-            Icons.backspace,
-            size: 35.0,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            InkResponse(
+              onTap: () => sudokuGrid.undo(),
+              highlightColor: Colors.transparent,
+              splashColor: Colors.transparent,
+              child: const Icon(
+                Icons.undo,
+                size: 45.0,
+              ),
+            ),
+            const SizedBox(height: 90),
+            InkResponse(
+              onTap: () => sudokuGrid.writeSelected(0),
+              highlightColor: Colors.transparent,
+              splashColor: Colors.transparent,
+              child: const Icon(
+                Icons.backspace,
+                size: 40.0,
+              ),
+            ),
+          ],
         ),
       ),
     );

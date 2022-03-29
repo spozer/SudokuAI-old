@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'package:flutter/material.dart';
 
 enum BoardStatus {
@@ -9,6 +10,7 @@ enum BoardStatus {
 class SudokuGrid extends ChangeNotifier {
   final List<List<SudokuGridCell>> _cellList;
   final List<SudokuGridBlock> _blockList;
+  final _undoQueue = Queue<List<int>>();
 
   SudokuGridCell? _selectedCell;
   static int _emptyCount = 0;
@@ -45,11 +47,6 @@ class SudokuGrid extends ChangeNotifier {
     return _status;
   }
 
-  void setValue(int row, int col, int value) {
-    _cellList[row][col].value = value;
-    notifyListeners();
-  }
-
   void clearBoard() {
     for (final row in _cellList) {
       for (final cell in row) {
@@ -59,8 +56,8 @@ class SudokuGrid extends ChangeNotifier {
     notifyListeners();
   }
 
-  void select(int row, int col) {
-    if (_cellList[row][col].id == _selectedCell?.id) return;
+  void select(int row, int col, {bool update = false}) {
+    if (!update && _cellList[row][col].id == _selectedCell?.id) return;
 
     final cell = _cellList[row][col];
     final oldSelectedCell = _selectedCell;
@@ -91,22 +88,44 @@ class SudokuGrid extends ChangeNotifier {
   void writeSelected(int value) {
     if (_selectedCell == null || !_selectedCell!.isModifiable || _selectedCell!.value == value) return;
 
+    final action = [_selectedCell!.row, _selectedCell!.col, _selectedCell!.value, 0];
+
     if (_selectedCell!.value == 0) {
       _emptyCount--;
+      action[3] = 1;
     } else if (value == 0) {
       if (_emptyCount == 0) _status = BoardStatus.inProgress;
       _emptyCount++;
+      action[3] = -1;
     }
+
+    _undoQueue.addLast(action);
 
     _selectedCell!.value = value;
     _updateUnit(_selectedCell!.row, _selectedCell!.col, _selectedCell!.blockId, (uCell) {
       uCell.status = (value != 0 && uCell.value == value) ? CellStatus.sameValue : CellStatus.inUnit;
     });
 
-    if (_emptyCount == 0) _status = _checkWinCondition() ? BoardStatus.solved : BoardStatus.hasErrors;
-
+    _checkWinCondition();
     notifyListeners();
   }
+
+  void undo() {
+    if (_undoQueue.isEmpty) return;
+
+    final lastAction = _undoQueue.removeLast();
+    final row = lastAction[0];
+    final col = lastAction[1];
+    final value = lastAction[2];
+    final dEmptyCount = lastAction[3];
+
+    _cellList[row][col].value = value;
+    _emptyCount += dEmptyCount;
+
+    _checkWinCondition();
+    select(row, col, update: true);
+  }
+
 
   void _updateUnit(int row, int col, int blockId, void Function(SudokuGridCell) update) {
     // Update row.
@@ -132,6 +151,8 @@ class SudokuGrid extends ChangeNotifier {
   }
 
   bool _checkWinCondition() {
+    if (_emptyCount != 0) return false;
+
     Set digits;
 
     // Check rows.
@@ -140,6 +161,7 @@ class SudokuGrid extends ChangeNotifier {
       for (int col = 0; col < 9; ++col) {
         if (!digits.add(_cellList[row][col].value)) {
           debugPrint('Duplicate in: $row, $col');
+          _status = BoardStatus.hasErrors;
           return false;
         }
       }
@@ -151,6 +173,7 @@ class SudokuGrid extends ChangeNotifier {
       for (int row = 0; row < 9; ++row) {
         if (!digits.add(_cellList[row][col].value)) {
           debugPrint('Duplicate in: $row, $col');
+          _status = BoardStatus.hasErrors;
           return false;
         }
       }
@@ -163,12 +186,14 @@ class SudokuGrid extends ChangeNotifier {
         for (final bCol in block.cols) {
           if (!digits.add(_cellList[bRow][bCol].value)) {
             debugPrint('Duplicate in: $bRow, $bCol');
+            _status = BoardStatus.hasErrors;
             return false;
           }
         }
       }
     }
 
+    _status = BoardStatus.solved;
     return true;
   }
 }
