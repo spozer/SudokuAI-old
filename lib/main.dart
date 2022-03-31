@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
-import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
+import 'scanner/sudoku_scanner.dart';
 import 'view/camera_view.dart';
 
 void main() async {
@@ -9,7 +8,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Bridge.
-  NativeSudokuScannerBridge.init();
+  SudokuScanner.init();
 
   // Show Status and Navigation Bar.
   SystemChrome.setEnabledSystemUIMode(

@@ -1,30 +1,27 @@
-struct Coordinate {
+struct Offset {
     double x;
     double y;
 };
 
-struct DetectionResult {
-    Coordinate top_left;
-    Coordinate top_right;
-    Coordinate bottom_left;
-    Coordinate bottom_right;
+struct BoundingBox {
+    Offset top_left = Offset{0, 0};
+    Offset top_right = Offset{1, 0};
+    Offset bottom_left = Offset{0, 1};
+    Offset bottom_right = Offset{1, 1};
 };
 
-extern "C" struct DetectionResult detect_grid(char *path);
+extern "C" {
+    struct BoundingBox *detect_grid(char *path);
 
-extern "C" int *extract_grid(
-    char *path,
-    DetectionResult detection_result);
+    int *extract_grid(char *path, BoundingBox *bounding_box);
 
-extern "C" int *extract_grid_from_roi(
-    char *path,
-    int roi_size,
-    int roi_offset);
+    int *extract_grid_from_roi(char *path, int roi_size, int roi_offset);
 
-extern "C" bool debug_grid_detection(char *path);
+    bool debug_grid_detection(char *path);
 
-extern "C" bool debug_grid_extraction(char *path, DetectionResult detection_result);
+    bool debug_grid_extraction(char *path, BoundingBox *bounding_box);
 
-extern "C" void set_model(char *path);
+    void set_model(char *path);
 
-extern "C" void free_pointer(int *pointer);
+    void free_pointer(int *pointer);
+}

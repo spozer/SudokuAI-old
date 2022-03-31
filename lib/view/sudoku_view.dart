@@ -327,9 +327,8 @@ class SudokuCellWidget extends StatelessWidget {
           return Container(
             color: _getColor(data.item2),
             padding: const EdgeInsets.all(5),
-            child: (child != null)
-                ? child
-                : (data.item1 != 0)
+            child: child ??
+                ((data.item1 != 0)
                     ? Center(
                         child: Text(
                           data.item1.toString(),
@@ -339,7 +338,7 @@ class SudokuCellWidget extends StatelessWidget {
                           ),
                         ),
                       )
-                    : const SizedBox(),
+                    : const SizedBox()),
           );
         },
         child: (!sudokuGrid.isModifiable(row, col))

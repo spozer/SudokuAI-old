@@ -6,7 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
+import '../scanner/sudoku_scanner.dart';
 import 'sudoku_view.dart';
 
 /// The main widget for taking pictures.
@@ -487,7 +487,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       }
 
       // If the picture was taken, extract Sudoku and display it.
-      final sudokuFuture = NativeSudokuScannerBridge.extractGridfromRoi(
+      final sudokuFuture = SudokuScanner.extractGridfromRoi(
         image.path,
         (_roiSize * _previewWidth).toInt(),
         (_roiOffset * _previewHeight).toInt(),
@@ -515,8 +515,8 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       final image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image != null) {
-        final resultBB = await NativeSudokuScannerBridge.detectGrid(image.path);
-        final sudokuFuture = NativeSudokuScannerBridge.extractGrid(image.path, resultBB);
+        final resultBB = await SudokuScanner.detectGrid(image.path);
+        final sudokuFuture = SudokuScanner.extractGrid(image.path, resultBB);
         _showSudokuGrid(sudokuFuture);
       } else {
         // Back button was pressed.

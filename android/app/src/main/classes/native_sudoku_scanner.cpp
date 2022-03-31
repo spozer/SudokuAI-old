@@ -6,54 +6,58 @@
 #include <opencv2/opencv.hpp>
 
 extern "C" __attribute__((visibility("default"))) __attribute__((used))
-struct DetectionResult detect_grid(char *path) {
+struct BoundingBox *detect_grid(char *path) {
     // struct DetectionResult *coordinate = (struct DetectionResult *)malloc(sizeof(struct DetectionResult));
+
+    BoundingBox *bb_ptr = (BoundingBox*)malloc(sizeof(BoundingBox));
     cv::Mat mat = cv::imread(path);
 
     if (mat.size().width == 0 || mat.size().height == 0) {
-        return DetectionResult{
-            Coordinate{0, 0},
-            Coordinate{1, 0},
-            Coordinate{0, 1},
-            Coordinate{1, 1}};
+        return bb_ptr;
     }
 
     std::vector<cv::Point> points = GridDetector::detect_grid(mat);
 
-    return DetectionResult{
-        Coordinate{(double)points[0].x / mat.size().width, (double)points[0].y / mat.size().height},
-        Coordinate{(double)points[1].x / mat.size().width, (double)points[1].y / mat.size().height},
-        Coordinate{(double)points[2].x / mat.size().width, (double)points[2].y / mat.size().height},
-        Coordinate{(double)points[3].x / mat.size().width, (double)points[3].y / mat.size().height}};
+    bb_ptr->top_left.x = (double)points[0].x / mat.size().width;
+    bb_ptr->top_left.y = (double)points[0].y / mat.size().height;
+    bb_ptr->top_right.x = (double)points[1].x / mat.size().width;
+    bb_ptr->top_right.y = (double)points[1].y / mat.size().height;
+    bb_ptr->bottom_left.x = (double)points[2].x / mat.size().width;
+    bb_ptr->bottom_left.y = (double)points[2].y / mat.size().height;
+    bb_ptr->bottom_right.x = (double)points[3].x / mat.size().width;
+    bb_ptr->bottom_right.y = (double)points[3].y / mat.size().height;
+
+    return bb_ptr;
 }
 
 extern "C" __attribute__((visibility("default"))) __attribute__((used))
-int *extract_grid(char *path, DetectionResult detection_result) {
-    assert(detection_result.top_left.x > 0 && detection_result.top_left.y > 0
-            && detection_result.top_right.x > 0 && detection_result.top_right.y > 0
-            && detection_result.bottom_left.x > 0 && detection_result.bottom_left.y > 0
-            && detection_result.bottom_right.x > 0 && detection_result.bottom_right.x > 0);
-    assert(detection_result.top_left.x <= detection_result.top_right.x
-            && detection_result.top_left.x <= detection_result.bottom_right.x
-            && detection_result.bottom_left.x <= detection_result.top_right.x
-            && detection_result.bottom_left.x <= detection_result.bottom_right.x
-            && detection_result.top_left.y <= detection_result.bottom_left.y
-            && detection_result.top_left.y <= detection_result.bottom_right.y
-            && detection_result.top_right.y <= detection_result.bottom_left.y
-            && detection_result.top_right.y <= detection_result.bottom_right.y);
+int *extract_grid(char *path, BoundingBox *bounding_box) {
+    assert(bounding_box->top_left.x > 0 && bounding_box->top_left.y > 0);
+    assert(bounding_box->top_right.x > 0 && bounding_box->top_right.y > 0);
+    assert(bounding_box->bottom_left.x > 0 && bounding_box->bottom_left.y > 0);
+    assert(bounding_box->bottom_right.x > 0 && bounding_box->bottom_right.y > 0);
+    assert(bounding_box->top_left.x <= bounding_box->top_right.x);
+    assert(bounding_box->top_left.x <= bounding_box->bottom_right.x);
+    assert(bounding_box->top_left.y <= bounding_box->bottom_left.y);
+    assert(bounding_box->top_left.y <= bounding_box->bottom_right.y);
+    assert(bounding_box->bottom_left.x <= bounding_box->top_right.x);
+    assert(bounding_box->bottom_left.x <= bounding_box->bottom_right.x);
+    assert(bounding_box->top_right.y <= bounding_box->bottom_left.y);
+    assert(bounding_box->top_right.y <= bounding_box->bottom_right.y);
 
     cv::Mat mat = cv::imread(path);
 
     std::vector<int> grid = GridExtractor::extract_grid(
         mat,
-        detection_result.top_left.x * mat.size().width,
-        detection_result.top_left.y * mat.size().height,
-        detection_result.top_right.x * mat.size().width,
-        detection_result.top_right.y * mat.size().height,
-        detection_result.bottom_left.x * mat.size().width,
-        detection_result.bottom_left.y * mat.size().height,
-        detection_result.bottom_right.x * mat.size().width,
-        detection_result.bottom_right.y * mat.size().height);
+        bounding_box->top_left.x * mat.size().width,
+        bounding_box->top_left.y * mat.size().height,
+        bounding_box->top_right.x * mat.size().width,
+        bounding_box->top_right.y * mat.size().height,
+        bounding_box->bottom_left.x * mat.size().width,
+        bounding_box->bottom_left.y * mat.size().height,
+        bounding_box->bottom_right.x * mat.size().width,
+        bounding_box->bottom_right.y * mat.size().height);
+    mat.release();
 
     int *grid_ptr = (int*)malloc(grid.size() * sizeof(int));
 
@@ -88,6 +92,7 @@ int *extract_grid_from_roi(
     cv::Mat image_copy = image.clone();
 
     std::vector<cv::Point> points = GridDetector::detect_grid(image);
+    image.release();
 
     std::vector<int> grid = GridExtractor::extract_grid(
         image_copy,
@@ -99,6 +104,7 @@ int *extract_grid_from_roi(
         points[2].y,
         points[3].x,
         points[3].y);
+    image_copy.release();
 
     int *grid_ptr = (int*)malloc(grid.size() * sizeof(int));
 
@@ -123,7 +129,7 @@ bool debug_grid_detection(char *path) {
 }
 
 extern "C" __attribute__((visibility("default"))) __attribute__((used))
-bool debug_grid_extraction(char *path, DetectionResult detection_result) {
+bool debug_grid_extraction(char *path, BoundingBox *bounding_box) {
     cv::Mat transformed;
     cv::Mat thresholded;
     cv::Mat img = cv::imread(path);
@@ -131,14 +137,14 @@ bool debug_grid_extraction(char *path, DetectionResult detection_result) {
     cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
     transformed = GridExtractor::crop_and_transform(
         img,
-        detection_result.top_left.x * img.size().width,
-        detection_result.top_left.y * img.size().height,
-        detection_result.top_right.x * img.size().width,
-        detection_result.top_right.y * img.size().height,
-        detection_result.bottom_left.x * img.size().width,
-        detection_result.bottom_left.y * img.size().height,
-        detection_result.bottom_right.x * img.size().width,
-        detection_result.bottom_right.y * img.size().height);
+        bounding_box->top_left.x * img.size().width,
+        bounding_box->top_left.y * img.size().height,
+        bounding_box->top_right.x * img.size().width,
+        bounding_box->top_right.y * img.size().height,
+        bounding_box->bottom_left.x * img.size().width,
+        bounding_box->bottom_left.y * img.size().height,
+        bounding_box->bottom_right.x * img.size().width,
+        bounding_box->bottom_right.y * img.size().height);
     // always check parameters with grid_extractor.cpp
     cv::adaptiveThreshold(transformed, thresholded, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 63, 10);
 

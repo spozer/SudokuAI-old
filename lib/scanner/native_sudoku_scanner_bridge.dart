@@ -1,236 +1,164 @@
-import 'dart:async';
-import 'dart:ffi';
-import 'dart:io';
-import 'package:ffi/ffi.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:flutter/services.dart' show rootBundle;
-
-// Example at https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
-
-// Structs don't have to be allocated to be passed as value from dart to native c code:
-// https://medium.com/dartlang/implementing-structs-by-value-in-dart-ffi-1cb1829d11a9
-// Futhermore structs returned from native c code to dart are backed in c heap
-
-class Coordinate extends Struct {
-  @Double()
-  external double x;
-
-  @Double()
-  external double y;
-}
-
-class DetectionResult extends Struct {
-  external Coordinate topLeft;
-  external Coordinate topRight;
-  external Coordinate bottomLeft;
-  external Coordinate bottomRight;
-}
-
-// The following typedefs are function layouts needed for bridging between
-// native code and dart.
-
-// ignore: camel_case_types
-typedef detect_grid_function = DetectionResult Function(Pointer<Utf8> imagePath);
-typedef DetectGridFunction = DetectionResult Function(Pointer<Utf8> imagePath);
-
-// ignore: camel_case_types
-typedef extract_grid_function = Pointer<Int32> Function(
-  Pointer<Utf8> imagePath,
-  DetectionResult detectionResult,
-);
-
-typedef ExtractGridFunction = Pointer<Int32> Function(
-  Pointer<Utf8> imagePath,
-  DetectionResult detectionResult,
-);
-
-// ignore: camel_case_types
-typedef extract_grid_from_roi_function = Pointer<Int32> Function(
-  Pointer<Utf8> imagePath,
-  Int32 roiSize,
-  Int32 roiOffset,
-);
-
-typedef ExtractGridFromRoiFunction = Pointer<Int32> Function(
-  Pointer<Utf8> imagePath,
-  int roiSize,
-  int roiOffset,
-);
-
-// ignore: camel_case_types
-typedef debug_grid_extraction_function = Int8 Function(
-  Pointer<Utf8> imagePath,
-  DetectionResult detectionResult,
-);
-
-typedef DebugGridExtractionFunction = int Function(
-  Pointer<Utf8> imagePath,
-  DetectionResult detectionResult,
-);
-
-// ignore: camel_case_types
-typedef debug_function = Int8 Function(Pointer<Utf8> imagePath);
-typedef DebugFunction = int Function(Pointer<Utf8> imagePath);
-
-// ignore: camel_case_types
-typedef set_model_function = Void Function(Pointer<Utf8> path);
-typedef SetModelFunction = void Function(Pointer<Utf8> path);
-
-// ignore: camel_case_types
-typedef free_pointer_function = Void Function(Pointer<Int32> pointer);
-typedef FreePointerFunction = void Function(Pointer<Int32> pointer);
-
 /// Bridge between Dart and native C++ code.
 ///
 /// Defines all public functions of the SudokuScanner C++ library and
 /// makes them callable through Dart's Foreign Function Interface (FFI).
-class NativeSudokuScannerBridge {
-  static late DynamicLibrary _nativeSudokuScanner;
-  static late String _tfliteModelPath;
 
-  /// Initializes native SudokuScanner library and loads the tensorflow model.
-  ///
-  /// The neural network model - used for classifying printed digits - is
-  /// encoded in the app package. Because of this native C++ Tensorflow
-  /// cannot read the model straight from assets. Therefore we read and
-  /// decode the model first and save it then to the app's folder. This only
-  /// needs to be done once.
-  static Future<void> init() async {
-    final extDir = await getExternalStorageDirectory();
-    _tfliteModelPath = extDir!.path + "/model.tflite";
+// Example at https://github.com/dart-lang/samples/blob/master/ffi/structs/structs.dart
 
-    // Initialize native SudokuScanner library.
-    _nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+import 'dart:async';
+import 'dart:ffi';
+import 'dart:ui';
+import 'package:ffi/ffi.dart';
+import 'native_functions.dart';
 
-    if (!await File(_tfliteModelPath).exists()) {
-      var tfliteModel = await rootBundle.load('assets/model.tflite');
+class BoundingBox {
+  Offset topLeft;
+  Offset topRight;
+  Offset bottomLeft;
+  Offset bottomRight;
 
-      File(_tfliteModelPath).writeAsBytes(tfliteModel.buffer.asUint8List(
-        tfliteModel.offsetInBytes,
-        tfliteModel.lengthInBytes,
-      ));
-    }
-    _setModel(_tfliteModelPath);
+  BoundingBox({
+    required this.topLeft,
+    required this.topRight,
+    required this.bottomLeft,
+    required this.bottomRight,
+  });
+
+  factory BoundingBox.from(NativeBoundingBox nbb) {
+    return BoundingBox(
+      topLeft: Offset(nbb.topLeft.x, nbb.topLeft.y),
+      topRight: Offset(nbb.topRight.x, nbb.topRight.y),
+      bottomLeft: Offset(nbb.bottomLeft.x, nbb.bottomLeft.y),
+      bottomRight: Offset(nbb.bottomRight.x, nbb.bottomRight.y),
+    );
   }
+}
 
-  /// Bridge for [detect_grid].
-  static Future<DetectionResult> detectGrid(String path) async {
-    final nativeDetectGrid =
-        _nativeSudokuScanner.lookupFunction<detect_grid_function, DetectGridFunction>("detect_grid");
+/// Bridge for [detect_grid].
+BoundingBox detectGrid(String path) {
+  final nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+  final nativeDetectGrid = nativeSudokuScanner.lookupFunction<detect_grid_function, DetectGridFunction>("detect_grid");
 
-    // Creates a char pointer.
-    final pathPointer = path.toNativeUtf8();
+  // Creates a char pointer.
+  final pathPointer = path.toNativeUtf8();
 
-    DetectionResult detectionResult = nativeDetectGrid(pathPointer);
+  final nativeBoundingBoxPointer = nativeDetectGrid(pathPointer);
 
-    // Need to free memory.
-    malloc.free(pathPointer);
+  final boundingBox = BoundingBox.from(nativeBoundingBoxPointer.ref);
 
-    return detectionResult;
-  }
+  // Need to free memory.
+  malloc.free(pathPointer);
+  malloc.free(nativeBoundingBoxPointer);
 
-  /// Bridge for [extract_grid].
-  static Future<List<int>> extractGrid(String path, DetectionResult detectionResult) async {
-    final nativeExtractGrid =
-        _nativeSudokuScanner.lookupFunction<extract_grid_function, ExtractGridFunction>("extract_grid");
+  return boundingBox;
+}
 
-    // Creates a char pointer.
-    final pathPointer = path.toNativeUtf8();
+/// Bridge for [extract_grid].
+List<int> extractGrid(String path, BoundingBox boundingBox) {
+  final nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+  final nativeExtractGrid =
+      nativeSudokuScanner.lookupFunction<extract_grid_function, ExtractGridFunction>("extract_grid");
 
-    Pointer<Int32> gridArray = nativeExtractGrid(pathPointer, detectionResult);
+  // Creates a char pointer and Native Bounding Box pointer.
+  final pathPointer = path.toNativeUtf8();
+  final nativeBoundingBoxPointer = NativeBoundingBox.from(boundingBox);
 
-    // It is not clear, whether asTypeList gets handled from GC or not:
-    // https://github.com/dart-lang/ffi/issues/22
-    // https://github.com/dart-lang/sdk/issues/45508
-    // Either way it is probably better to free c heap in native code.
-    List<int> gridList = List.from(gridArray.asTypedList(81), growable: false);
+  Pointer<Int32> gridArray = nativeExtractGrid(pathPointer, nativeBoundingBoxPointer);
 
-    // Free memory.
-    malloc.free(pathPointer);
-    _freePointer(gridArray);
+  // It is not clear, whether asTypeList gets handled from GC or not:
+  // https://github.com/dart-lang/ffi/issues/22
+  // https://github.com/dart-lang/sdk/issues/45508
+  // Either way it is probably better to free c heap in native code.
+  List<int> gridList = List.from(gridArray.asTypedList(81), growable: false);
 
-    return gridList;
-  }
+  // Free memory.
+  malloc.free(pathPointer);
+  malloc.free(nativeBoundingBoxPointer);
+  _freePointer(gridArray);
 
-  /// Bridge for [extract_grid_from_roi].
-  static Future<List<int>> extractGridfromRoi(
-    String path,
-    int roiSize,
-    int roiOffset,
-  ) async {
-    final nativeExtractGridfromRoi = _nativeSudokuScanner
-        .lookupFunction<extract_grid_from_roi_function, ExtractGridFromRoiFunction>("extract_grid_from_roi");
+  return gridList;
+}
 
-    // creates a char pointer
-    final pathPointer = path.toNativeUtf8();
+/// Bridge for [extract_grid_from_roi].
+List<int> extractGridfromRoi(String path, int roiSize, int roiOffset) {
+  final nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+  final nativeExtractGridfromRoi = nativeSudokuScanner
+      .lookupFunction<extract_grid_from_roi_function, ExtractGridFromRoiFunction>("extract_grid_from_roi");
 
-    Pointer<Int32> gridArray = nativeExtractGridfromRoi(pathPointer, roiSize, roiOffset);
+  // creates a char pointer
+  final pathPointer = path.toNativeUtf8();
 
-    // It is not clear, whether asTypeList gets handled from GC or not:
-    // https://github.com/dart-lang/ffi/issues/22
-    // https://github.com/dart-lang/sdk/issues/45508
-    // Either way it is probably better to free c heap in native code.
-    List<int> gridList = List.from(gridArray.asTypedList(81), growable: false);
+  Pointer<Int32> gridArray = nativeExtractGridfromRoi(pathPointer, roiSize, roiOffset);
 
-    // Free memory.
-    malloc.free(pathPointer);
-    _freePointer(gridArray);
+  // It is not clear, whether asTypeList gets handled from GC or not:
+  // https://github.com/dart-lang/ffi/issues/22
+  // https://github.com/dart-lang/sdk/issues/45508
+  // Either way it is probably better to free c heap in native code.
+  List<int> gridList = List.from(gridArray.asTypedList(81), growable: false);
 
-    return gridList;
-  }
+  // Free memory.
+  malloc.free(pathPointer);
+  _freePointer(gridArray);
 
-  /// Bridge for [debug_grid_detection].
-  static Future<bool> debugGridDetection(String path) async {
-    final nativeDebugGridDetection =
-        _nativeSudokuScanner.lookupFunction<debug_function, DebugFunction>("debug_grid_detection");
+  return gridList;
+}
 
-    // Creates a char pointer.
-    final pathPointer = path.toNativeUtf8();
+/// Bridge for [debug_grid_detection].
+Future<bool> debugGridDetection(String path) async {
+  final nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+  final nativeDebugGridDetection =
+      nativeSudokuScanner.lookupFunction<debug_function, DebugFunction>("debug_grid_detection");
 
-    int debugImage = nativeDebugGridDetection(pathPointer);
+  // Creates a char pointer.
+  final pathPointer = path.toNativeUtf8();
 
-    // Free memory.
-    malloc.free(pathPointer);
+  int debugImage = nativeDebugGridDetection(pathPointer);
 
-    return debugImage == 1;
-  }
+  // Free memory.
+  malloc.free(pathPointer);
 
-  /// Bridge for [debug_grid_extraction].
-  static Future<bool> debugGridExtraction(String path, DetectionResult detectionResult) async {
-    final nativeDebugGridExtraction = _nativeSudokuScanner
-        .lookupFunction<debug_grid_extraction_function, DebugGridExtractionFunction>("debug_grid_extraction");
+  return debugImage == 1;
+}
 
-    // Creates a char pointer.
-    final pathPointer = path.toNativeUtf8();
+/// Bridge for [debug_grid_extraction].
+Future<bool> debugGridExtraction(String path, BoundingBox boundingBox) async {
+  final nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+  final nativeDebugGridExtraction = nativeSudokuScanner
+      .lookupFunction<debug_grid_extraction_function, DebugGridExtractionFunction>("debug_grid_extraction");
 
-    int debugImage = nativeDebugGridExtraction(pathPointer, detectionResult);
+  // Creates a char pointer.
+  final pathPointer = path.toNativeUtf8();
+  final nativeBoundingBoxPointer = NativeBoundingBox.from(boundingBox);
 
-    // Free memory.
-    malloc.free(pathPointer);
+  int debugImage = nativeDebugGridExtraction(pathPointer, nativeBoundingBoxPointer);
 
-    return debugImage == 1;
-  }
+  // Free memory.
+  malloc.free(pathPointer);
 
-  /// Bridge for [set_model].
-  /// This function is only needed for initialization.
-  static Future<void> _setModel(String path) async {
-    final nativeSetModel = _nativeSudokuScanner.lookupFunction<set_model_function, SetModelFunction>("set_model");
+  return debugImage == 1;
+}
 
-    // Creates a char pointer.
-    final pathPointer = path.toNativeUtf8();
+/// Bridge for [set_model].
+/// This function is only needed for initialization.
+void setModel(String path) {
+  final nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+  final nativeSetModel = nativeSudokuScanner.lookupFunction<set_model_function, SetModelFunction>("set_model");
 
-    nativeSetModel(pathPointer);
+  // Creates a char pointer.
+  final pathPointer = path.toNativeUtf8();
 
-    // Free memory.
-    malloc.free(pathPointer);
-  }
+  nativeSetModel(pathPointer);
 
-  /// Bridge for [free_pointer].
-  /// Free a pointer on native heap.
-  static Future<void> _freePointer(Pointer<Int32> pointer) async {
-    final nativeFreePointer =
-        _nativeSudokuScanner.lookupFunction<free_pointer_function, FreePointerFunction>("free_pointer");
+  // Free memory.
+  malloc.free(pathPointer);
+}
 
-    nativeFreePointer(pointer);
-  }
+/// Bridge for [free_pointer].
+/// Free a pointer on native heap.
+void _freePointer(Pointer<Int32> pointer) {
+  final nativeSudokuScanner = DynamicLibrary.open("libnative_sudoku_scanner.so");
+  final nativeFreePointer =
+      nativeSudokuScanner.lookupFunction<free_pointer_function, FreePointerFunction>("free_pointer");
+
+  nativeFreePointer(pointer);
 }
