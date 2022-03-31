@@ -41,6 +41,7 @@ dependencies:
   ffi: ^1.1.2
   permission_handler: ^9.2.0
   provider: ^6.0.2
+  tuple: ^2.0.0
 
 dev_dependencies:
   flutter_test:

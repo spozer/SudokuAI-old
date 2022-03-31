@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'package:flutter/material.dart';
+import 'package:tuple/tuple.dart';
 
 enum BoardStatus {
   inProgress,
@@ -10,7 +11,7 @@ enum BoardStatus {
 class SudokuGrid extends ChangeNotifier {
   final List<List<SudokuGridCell>> _cellList;
   final List<SudokuGridBlock> _blockList;
-  final _undoQueue = Queue<List<int>>();
+  final _undoQueue = Queue<Tuple4<int, int, int, int>>();
 
   SudokuGridCell? _selectedCell;
   static int _emptyCount = 0;
@@ -47,6 +48,10 @@ class SudokuGrid extends ChangeNotifier {
     return _status;
   }
 
+  bool hasUndoHistory() {
+    return _undoQueue.isNotEmpty;
+  }
+
   void clearBoard() {
     for (final row in _cellList) {
       for (final cell in row) {
@@ -65,21 +70,25 @@ class SudokuGrid extends ChangeNotifier {
     // Notify old cell and its unit of unselect.
     if (oldSelectedCell != null) {
       oldSelectedCell.status = CellStatus.none;
-      _updateUnit(
-        oldSelectedCell.row,
-        oldSelectedCell.col,
-        oldSelectedCell.blockId,
-        (uCell) => uCell.status = CellStatus.none,
+      _actOnUnits(
+        oldSelectedCell,
+        (uCell) {
+          uCell.status = CellStatus.none;
+          return true;
+        },
+        onlyPeers: true,
       );
     }
     // Notify new cell and its unit of select.
     cell.status = CellStatus.selected;
-    _updateUnit(
-        row,
-        col,
-        cell.blockId,
-        (uCell) =>
-            uCell.status = (uCell.value != 0 && uCell.value == cell.value) ? CellStatus.sameValue : CellStatus.inUnit);
+    _actOnUnits(
+      cell,
+      (uCell) {
+        uCell.status = (uCell.value != 0 && uCell.value == cell.value) ? CellStatus.sameValue : CellStatus.inUnit;
+        return true;
+      },
+      onlyPeers: true,
+    );
 
     _selectedCell = cell;
     notifyListeners();
@@ -88,23 +97,32 @@ class SudokuGrid extends ChangeNotifier {
   void writeSelected(int value) {
     if (_selectedCell == null || !_selectedCell!.isModifiable || _selectedCell!.value == value) return;
 
-    final action = [_selectedCell!.row, _selectedCell!.col, _selectedCell!.value, 0];
+    int dEmptyCount = 0;
 
     if (_selectedCell!.value == 0) {
       _emptyCount--;
-      action[3] = 1;
+      dEmptyCount = 1;
     } else if (value == 0) {
-      if (_emptyCount == 0) _status = BoardStatus.inProgress;
       _emptyCount++;
-      action[3] = -1;
+      dEmptyCount = -1;
     }
 
-    _undoQueue.addLast(action);
+    _undoQueue.addLast(Tuple4<int, int, int, int>(
+      _selectedCell!.row,
+      _selectedCell!.col,
+      _selectedCell!.value,
+      dEmptyCount,
+    ));
 
     _selectedCell!.value = value;
-    _updateUnit(_selectedCell!.row, _selectedCell!.col, _selectedCell!.blockId, (uCell) {
-      uCell.status = (value != 0 && uCell.value == value) ? CellStatus.sameValue : CellStatus.inUnit;
-    });
+    _actOnUnits(
+      _selectedCell!,
+      (uCell) {
+        uCell.status = (value != 0 && uCell.value == value) ? CellStatus.sameValue : CellStatus.inUnit;
+        return true;
+      },
+      onlyPeers: true,
+    );
 
     _checkWinCondition();
     notifyListeners();
@@ -114,10 +132,10 @@ class SudokuGrid extends ChangeNotifier {
     if (_undoQueue.isEmpty) return;
 
     final lastAction = _undoQueue.removeLast();
-    final row = lastAction[0];
-    final col = lastAction[1];
-    final value = lastAction[2];
-    final dEmptyCount = lastAction[3];
+    final row = lastAction.item1;
+    final col = lastAction.item2;
+    final value = lastAction.item3;
+    final dEmptyCount = lastAction.item4;
 
     _cellList[row][col].value = value;
     _emptyCount += dEmptyCount;
@@ -126,73 +144,176 @@ class SudokuGrid extends ChangeNotifier {
     select(row, col, update: true);
   }
 
+  /// Based on http://norvig.com/sudoku.html
+  bool solve() {
+    // Assign static values.
+    // TODO: maybe do this in constructor of SudokuGrid?
+    for (final row in _cellList) {
+      for (final cell in row.where((cell) => !cell.isModifiable)) {
+        if (!_assign(cell, cell.value, [])) return false;
+      }
+    }
 
-  void _updateUnit(int row, int col, int blockId, void Function(SudokuGridCell) update) {
-    // Update row.
+    if (!_search()) return false;
+
+    // Change actual values of Sudoku grid.
+    for (final row in _cellList) {
+      for (final cell in row) {
+        cell.value = cell.possibilities.first;
+      }
+    }
+
+    _emptyCount = 0;
+    _status = BoardStatus.solved;
+    _undoQueue.clear();
+
+    if (_selectedCell != null) {
+      select(_selectedCell!.row, _selectedCell!.col, update: true);
+    } else {
+      notifyListeners();
+    }
+
+    return true;
+  }
+
+  bool _assign(SudokuGridCell cell, int value, List<SudokuGridCell>? backtrackList) {
+    final otherValues = Set<int>.from(cell.possibilities);
+    otherValues.remove(value);
+
+    return otherValues.every((value) => _eliminate(cell, value, backtrackList));
+  }
+
+  bool _eliminate(SudokuGridCell cell, int value, List<SudokuGridCell>? backtrackList) {
+    bool doBacktrack = backtrackList != null;
+    // Already eliminated.
+    if (!cell.eliminatePosibility(value, backtrack: doBacktrack)) return true;
+
+    if (doBacktrack) backtrackList.add(cell);
+
+    if (cell.possibilities.isEmpty) {
+      // Contradiction: removed last value.
+      return false;
+    } else if (cell.possibilities.length == 1) {
+      final possibleValues = cell.possibilities;
+
+      if (!possibleValues.every((value) => _actOnUnits(
+            cell,
+            (cell) => _eliminate(cell, value, backtrackList),
+            onlyPeers: true,
+          ))) {
+        return false;
+      }
+    }
+
+    // Check if value can only be asigned to one cell.
+    List<SudokuGridCell> valuePlaces = [];
+    _actOnUnits(cell, (cell) {
+      if (cell.possibilities.contains(value)) valuePlaces.add(cell);
+      return true;
+    });
+
+    if (valuePlaces.isEmpty) {
+      // Contradiction: no place for this value.
+      return false;
+    } else if (valuePlaces.length == 1) {
+      if (!_assign(valuePlaces[0], value, backtrackList)) return false;
+    }
+    return true;
+  }
+
+  bool _search() {
+    // Check if Sudoku already solved.
+    if (_cellList.every((row) => row.every((cell) => cell.possibilities.length == 1))) return true;
+
+    // Get cell with fewest possibilities.
+    SudokuGridCell? nextCell;
+    for (final row in _cellList) {
+      for (final cell in row.where((cell) => cell.possibilities.length > 1)) {
+        if (nextCell == null || cell.possibilities.length < nextCell.possibilities.length) nextCell = cell;
+      }
+    }
+
+    final possibilities = Set<int>.from(nextCell!.possibilities);
+
+    // Try to assign one of the possible values.
+    for (final value in possibilities) {
+      List<SudokuGridCell> backtrackList = [];
+      if (_assign(nextCell, value, backtrackList) && _search()) return true;
+
+      for (final cell in backtrackList) {
+        cell.backtrackPosibilities();
+      }
+    }
+    // None of the possible assignments worked.
+    return false;
+  }
+
+  bool _actOnUnits(SudokuGridCell cell, bool Function(SudokuGridCell cell) action, {bool onlyPeers = false}) {
+    final row = cell.row;
+    final col = cell.col;
+    final blockId = cell.blockId;
+
+    // Run action on row unit.
     for (int uCol = 0; uCol < 9; ++uCol) {
-      if (uCol == col) continue;
-      update(_cellList[row][uCol]);
+      if (onlyPeers && uCol == col) continue;
+      if (!action(_cellList[row][uCol])) return false;
     }
 
-    // Update column.
+    // Run action on column unit.
     for (int uRow = 0; uRow < 9; ++uRow) {
-      if (uRow == row) continue;
-      update(_cellList[uRow][col]);
+      if (onlyPeers && uRow == row) continue;
+      if (!action(_cellList[uRow][col])) return false;
     }
 
-    // Update block.
+    // Run action on block unit.
     final block = _blockList[blockId];
     for (final bRow in block.rows) {
       for (final bCol in block.cols) {
-        if (bRow == row || bCol == col) continue;
-        update(_cellList[bRow][bCol]);
+        if ((bRow == row) != (bCol == col)) continue;
+        if (onlyPeers && bRow == row && bCol == col) continue;
+        if (!action(_cellList[bRow][bCol])) return false;
       }
     }
+    return true;
   }
 
   bool _checkWinCondition() {
-    if (_emptyCount != 0) return false;
+    if (_emptyCount != 0) {
+      _status = BoardStatus.inProgress;
+      return false;
+    }
 
-    Set digits;
+    for (int index = 0; index < 9; ++index) {
+      final digits = <int>{};
+      // Check row unit.
+      if (!_cellList[index].every((cell) => digits.add(cell.value))) {
+        debugPrint("Duplicate in row: $index");
+        _status = BoardStatus.hasErrors;
+        return false;
+      }
 
-    // Check rows.
-    for (int row = 0; row < 9; ++row) {
-      digits = <int>{};
-      for (int col = 0; col < 9; ++col) {
-        if (!digits.add(_cellList[row][col].value)) {
-          debugPrint('Duplicate in: $row, $col');
+      digits.clear();
+      // Check column unit.
+      for (int cRow = 0; cRow < 9; ++cRow) {
+        if (!digits.add(_cellList[cRow][index].value)) {
+          debugPrint("Duplicate in column: $index");
           _status = BoardStatus.hasErrors;
           return false;
         }
       }
-    }
 
-    // Check columns.
-    for (int col = 0; col < 9; ++col) {
-      digits = <int>{};
-      for (int row = 0; row < 9; ++row) {
-        if (!digits.add(_cellList[row][col].value)) {
-          debugPrint('Duplicate in: $row, $col');
-          _status = BoardStatus.hasErrors;
-          return false;
-        }
-      }
-    }
-
-    // Check blocks.
-    for (final block in _blockList) {
-      digits = <int>{};
-      for (final bRow in block.rows) {
-        for (final bCol in block.cols) {
+      digits.clear();
+      // Check block unit.
+      for (final bRow in _blockList[index].rows) {
+        for (final bCol in _blockList[index].cols) {
           if (!digits.add(_cellList[bRow][bCol].value)) {
-            debugPrint('Duplicate in: $bRow, $bCol');
+            debugPrint("Duplicate in block: $index");
             _status = BoardStatus.hasErrors;
             return false;
           }
         }
       }
     }
-
     _status = BoardStatus.solved;
     return true;
   }
@@ -228,15 +349,25 @@ class SudokuGridCell {
   final int _col;
   final int _blockId;
   final bool _isModifiable;
+  final _backtrackQueue = Queue<int>();
+  final Set<int> _possibilities = {1, 2, 3, 4, 5, 6, 7, 8, 9};
   int _value;
-  CellStatus _status = CellStatus.none;
+  CellStatus status = CellStatus.none;
 
   SudokuGridCell(this._id, this._row, this._col, this._value)
       : _isModifiable = (_value == 0),
         _blockId = (_row ~/ 3) * 3 + _col ~/ 3;
 
-  bool inUnitOf(SudokuGridCell cell) {
-    return (_row == cell.row || _col == cell.col || _blockId == cell.blockId);
+  bool eliminatePosibility(int value, {bool backtrack = true}) {
+    if (!_possibilities.remove(value)) return false;
+
+    if (backtrack) _backtrackQueue.addLast(value);
+    return true;
+  }
+
+  void backtrackPosibilities() {
+    assert(_backtrackQueue.isNotEmpty);
+    _possibilities.add(_backtrackQueue.removeLast());
   }
 
   int get id => _id;
@@ -245,16 +376,11 @@ class SudokuGridCell {
   int get blockId => _blockId;
   bool get isModifiable => _isModifiable;
   int get value => _value;
-  CellStatus get status => _status;
+  Set<int> get possibilities => _possibilities;
 
   set value(int value) {
     assert(0 <= value && value < 10);
-    if (!isModifiable || value == _value) return;
+    if (!isModifiable) return;
     _value = value;
-  }
-
-  set status(CellStatus status) {
-    if (status == _status) return;
-    _status = status;
   }
 }

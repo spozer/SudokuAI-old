@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tuple/tuple.dart';
 import '../grid/sudoku_grid.dart';
 import 'camera_view.dart';
 
@@ -136,7 +137,7 @@ class _SudokuViewState extends State<SudokuView> {
               ElevatedButton(
                 style: buttonStyle,
                 // TODO: solve Sudoku grid
-                onPressed: () {},
+                onPressed: () => sudokuGrid.solve(),
                 child: const Text("Solution"),
               ),
             ],
@@ -227,9 +228,16 @@ class _SudokuViewState extends State<SudokuView> {
               onTap: () => sudokuGrid.undo(),
               highlightColor: Colors.transparent,
               splashColor: Colors.transparent,
-              child: const Icon(
-                Icons.undo,
-                size: 45.0,
+              child: Selector<SudokuGrid, bool>(
+                selector: (_, sudokuGrid) => sudokuGrid.hasUndoHistory(),
+                builder: (_, hasUndoHistory, __) {
+                  debugPrint("rebuild of undo button color");
+                  return Icon(
+                    Icons.undo,
+                    size: 45.0,
+                    color: (hasUndoHistory) ? Colors.white : Colors.grey,
+                  );
+                },
               ),
             ),
             const SizedBox(height: 90),
@@ -312,14 +320,26 @@ class SudokuCellWidget extends StatelessWidget {
       onTap: () => sudokuGrid.select(row, col),
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
-      child: Selector<SudokuGrid, CellStatus>(
-        selector: (_, sudokuGrid) => sudokuGrid.getCellStatus(row, col),
-        builder: (_, status, child) {
+      child: Selector<SudokuGrid, Tuple2<int, CellStatus>>(
+        selector: (_, sudokuGrid) => Tuple2(sudokuGrid.getValue(row, col), sudokuGrid.getCellStatus(row, col)),
+        builder: (_, data, child) {
           debugPrint('container rebuild of ($row, $col)');
           return Container(
-            color: _getColor(status),
+            color: _getColor(data.item2),
             padding: const EdgeInsets.all(5),
-            child: child,
+            child: (child != null)
+                ? child
+                : (data.item1 != 0)
+                    ? Center(
+                        child: Text(
+                          data.item1.toString(),
+                          style: TextStyle(
+                            color: Colors.blue[900],
+                            fontSize: fontSize,
+                          ),
+                        ),
+                      )
+                    : const SizedBox(),
           );
         },
         child: (!sudokuGrid.isModifiable(row, col))
@@ -334,22 +354,7 @@ class SudokuCellWidget extends StatelessWidget {
                   ),
                 ),
               )
-            : Selector<SudokuGrid, int>(
-                selector: (_, sudokuGrid) => sudokuGrid.getValue(row, col),
-                builder: (_, value, child) {
-                  debugPrint("text rebuild of ($row, $col)");
-                  return (value != 0)
-                      ? Center(
-                          child: Text(
-                            value.toString(),
-                            style: TextStyle(
-                              color: Colors.blue[900],
-                              fontSize: fontSize,
-                            ),
-                          ),
-                        )
-                      : const SizedBox();
-                }),
+            : null,
       ),
     );
   }
