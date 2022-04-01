@@ -169,7 +169,7 @@ class _SudokuViewState extends State<SudokuView> {
               ),
             ],
           ),
-          child: const SudokuGridWidget(),
+          child: SudokuGridWidget(size: size * 0.96),
         ),
       ),
     );
@@ -258,7 +258,9 @@ class _SudokuViewState extends State<SudokuView> {
 }
 
 class SudokuGridWidget extends StatelessWidget {
-  const SudokuGridWidget({Key? key}) : super(key: key);
+  final double size;
+
+  const SudokuGridWidget({Key? key, required this.size}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +268,7 @@ class SudokuGridWidget extends StatelessWidget {
     return FittedBox(
       fit: BoxFit.contain,
       child: Table(
-        defaultColumnWidth: const FixedColumnWidth(40.0),
+        defaultColumnWidth: FixedColumnWidth(size / 9),
         border: const TableBorder(
           left: BorderSide(width: 3.0, color: Colors.black),
           top: BorderSide(width: 3.0, color: Colors.black),
@@ -285,21 +287,26 @@ class SudokuGridWidget extends StatelessWidget {
 
   List<Widget> _getRow(int rowNumber) {
     return List.generate(9, (int colNumber) {
-      return Container(
-        height: 40.0,
-        decoration: BoxDecoration(
-          border: Border(
-            right: BorderSide(
-              width: (colNumber % 3 == 2) ? 3.0 : 1.0,
-              color: Colors.black,
-            ),
-            bottom: BorderSide(
-              width: (rowNumber % 3 == 2) ? 3.0 : 1.0,
-              color: Colors.black,
+      return AspectRatio(
+        aspectRatio: 1.0,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              right: BorderSide(
+                width: (colNumber % 3 == 2) ? 3.0 : 1.0,
+                color: Colors.black,
+              ),
+              bottom: BorderSide(
+                width: (rowNumber % 3 == 2) ? 3.0 : 1.0,
+                color: Colors.black,
+              ),
             ),
           ),
+          child: SudokuCellWidget(
+            row: rowNumber,
+            col: colNumber,
+          ),
         ),
-        child: SudokuCellWidget(rowNumber, colNumber),
       );
     });
   }
@@ -309,24 +316,30 @@ class SudokuCellWidget extends StatelessWidget {
   final int row;
   final int col;
 
-  const SudokuCellWidget(this.row, this.col, {Key? key}) : super(key: key);
+  const SudokuCellWidget({
+    Key? key,
+    required this.row,
+    required this.col,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final sudokuGrid = context.read<SudokuGrid>();
-    const fontSize = 20.0;
+    const fontSize = 23.0;
     debugPrint("whole rebuild of ($row, $col)");
     return InkResponse(
       onTap: () => sudokuGrid.select(row, col),
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
       child: Selector<SudokuGrid, Tuple2<int, CellStatus>>(
-        selector: (_, sudokuGrid) => Tuple2(sudokuGrid.getValue(row, col), sudokuGrid.getCellStatus(row, col)),
+        selector: (_, sudokuGrid) => Tuple2(
+          sudokuGrid.getValue(row, col),
+          sudokuGrid.getCellStatus(row, col),
+        ),
         builder: (_, data, child) {
           debugPrint('container rebuild of ($row, $col)');
           return Container(
             color: _getColor(data.item2),
-            padding: const EdgeInsets.all(5),
             child: child ??
                 ((data.item1 != 0)
                     ? Center(
