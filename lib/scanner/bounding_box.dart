@@ -22,4 +22,23 @@ class BoundingBox {
       bottomRight: Offset(nbb.bottomRight.x, nbb.bottomRight.y),
     );
   }
+
+  List<Offset> asPoints(Size size) {
+    final ptTopLeft = _scaleOffset(topLeft, size);
+    final ptTopRight = _scaleOffset(topRight, size);
+    final ptBottomLeft = _scaleOffset(bottomLeft, size);
+    final ptBottomRight = _scaleOffset(bottomRight, size);
+
+    return [
+      ptTopLeft,
+      ptTopRight,
+      ptBottomRight,
+      ptBottomLeft,
+      ptTopLeft,
+    ];
+  }
+
+  Offset _scaleOffset(Offset offset, Size size) {
+    return Offset(offset.dx * size.width, offset.dy * size.height);
+  }
 }

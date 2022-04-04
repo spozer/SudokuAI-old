@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../scanner/sudoku_scanner.dart';
 import '../scanner/bounding_box.dart';
@@ -20,11 +21,12 @@ class ScannerView extends StatefulWidget {
 }
 
 class _ScannerViewState extends State<ScannerView> {
-  late Future<BoundingBox> boundingBoxFuture;
+  late Future<BoundingBox> boundingBox;
+  final GlobalKey _imageWidgetKey = GlobalKey();
 
   @override
   void initState() {
-    boundingBoxFuture = SudokuScanner.detectGrid(widget.imagePath);
+    boundingBox = SudokuScanner.detectGrid(widget.imagePath);
     super.initState();
   }
 
@@ -38,8 +40,15 @@ class _ScannerViewState extends State<ScannerView> {
       child: Scaffold(
         body: Stack(
           children: <Widget>[
-            _getImage(),
-            _getBoundingBox(),
+            Container(
+              color: Colors.black,
+              child: Center(
+                child: Stack(children: <Widget>[
+                  _getImage(),
+                  _getBoundingBox(),
+                ]),
+              ),
+            ),
             _getButtonBar(),
           ],
         ),
@@ -48,22 +57,34 @@ class _ScannerViewState extends State<ScannerView> {
   }
 
   Widget _getImage() {
-    return Container(
-      color: Colors.black,
-      child: Center(
-        child: Image.file(File(widget.imagePath)),
-      ),
+    return Image.file(
+      File(widget.imagePath),
+      key: _imageWidgetKey,
     );
   }
 
   Widget _getBoundingBox() {
     return FutureBuilder(
-      future: boundingBoxFuture,
-      builder: (_, snapshot) {
+      future: boundingBox,
+      builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
-          return Container();
+          final keyContext = _imageWidgetKey.currentContext;
+
+          if (keyContext == null) {
+            return const SizedBox();
+          }
+
+          final imageSize = (keyContext.findRenderObject() as RenderBox).size;
+          final boundingBox = snapshot.data as BoundingBox;
+
+          return CustomPaint(
+            painter: EdgePainter(
+              points: boundingBox.asPoints(imageSize),
+              color: const Color.fromARGB(255, 43, 188, 255),
+            ),
+          );
         } else {
-          return const Center(child: CircularProgressIndicator());
+          return const SizedBox();
         }
       },
     );
@@ -74,11 +95,57 @@ class _ScannerViewState extends State<ScannerView> {
       alignment: Alignment.bottomCenter,
       child: ElevatedButton(
         onPressed: () async {
-          final valueList = SudokuScanner.extractGrid(widget.imagePath, await boundingBoxFuture);
+          final valueList = SudokuScanner.extractGrid(widget.imagePath, await boundingBox);
           widget.showSudoku(valueList);
         },
-        child: const Icon(Icons.navigate_next),
+        style: ElevatedButton.styleFrom(
+          elevation: 5,
+          primary: const Color.fromARGB(255, 102, 102, 102),
+          shadowColor: Colors.black,
+        ),
+        child: FutureBuilder(
+          future: boundingBox,
+          builder: (_, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done) {
+              return const Icon(Icons.check);
+            } else {
+              return const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              );
+            }
+          },
+        ),
       ),
     );
+  }
+}
+
+class EdgePainter extends CustomPainter {
+  final List<Offset> points;
+  final Color color;
+
+  EdgePainter({
+    required this.points,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(0.5)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawPoints(PointMode.polygon, points, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+    return true;
   }
 }
