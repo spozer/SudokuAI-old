@@ -1,6 +1,7 @@
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
-import 'package:sudokuai/scanner/native_sudoku_scanner_bridge.dart';
+import 'native_sudoku_scanner_bridge.dart';
+import 'bounding_box.dart';
 
 // Structs don't have to be allocated to be passed as value from dart to native c code:
 // https://medium.com/dartlang/implementing-structs-by-value-in-dart-ffi-1cb1829d11a9

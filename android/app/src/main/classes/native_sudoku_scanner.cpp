@@ -32,8 +32,8 @@ struct BoundingBox *detect_grid(char *path) {
 
 extern "C" __attribute__((visibility("default"))) __attribute__((used))
 int *extract_grid(char *path, BoundingBox *bounding_box) {
-    assert(bounding_box->top_left.x > 0 && bounding_box->top_left.y > 0);
-    assert(bounding_box->top_right.x > 0 && bounding_box->top_right.y > 0);
+    assert(bounding_box->top_left.x >= 0 && bounding_box->top_left.y >= 0);
+    assert(bounding_box->top_right.x > 0 && bounding_box->top_right.y >= 0);
     assert(bounding_box->bottom_left.x > 0 && bounding_box->bottom_left.y > 0);
     assert(bounding_box->bottom_right.x > 0 && bounding_box->bottom_right.y > 0);
     assert(bounding_box->top_left.x <= bounding_box->top_right.x);

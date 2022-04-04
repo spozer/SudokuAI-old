@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'scanner/sudoku_scanner.dart';
-import 'view/camera_view.dart';
+import 'view_controller.dart';
 
 void main() async {
   // Ensure that plugin services are initialized.
@@ -30,6 +30,6 @@ void main() async {
       brightness: Brightness.dark,
       visualDensity: VisualDensity.adaptivePlatformDensity,
     ),
-    home: const CameraView(),
+    home: const ViewController(),
   ));
 }

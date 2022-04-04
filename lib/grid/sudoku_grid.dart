@@ -9,39 +9,42 @@ enum BoardStatus {
 }
 
 class SudokuGrid extends ChangeNotifier {
-  final List<List<SudokuGridCell>> _cellList;
   final List<SudokuGridBlock> _blockList;
   final _undoQueue = Queue<Tuple4<int, int, int, int>>();
 
+  List<List<SudokuGridCell>>? _cellList;
   SudokuGridCell? _selectedCell;
-  static int _emptyCount = 0;
+  int _emptyCount = 0;
   BoardStatus _status = BoardStatus.inProgress;
 
-  SudokuGrid(List<int> valueList)
-      :
-        // Create Sudoku grid.
-        _cellList = List.generate(9, (index) {
-          final row = index;
-          return List.generate(9, (index) {
-            final col = index;
-            final id = row * 9 + col;
-            final value = valueList[id];
-            if (value == 0) _emptyCount++;
-            return SudokuGridCell(id, row, col, value);
-          }, growable: false);
-        }),
-        _blockList = List.generate(9, (index) => SudokuGridBlock(index), growable: false);
+  SudokuGrid() : _blockList = List.generate(9, (index) => SudokuGridBlock(index), growable: false);
+
+  void fillIn(List<int> valueList) {
+    _cellList = List.generate(9, (index) {
+      final row = index;
+      return List.generate(9, (index) {
+        final col = index;
+        final id = row * 9 + col;
+        final value = valueList[id];
+        if (value == 0) _emptyCount++;
+        return SudokuGridCell(id, row, col, value);
+      }, growable: false);
+    });
+  }
 
   int getValue(int row, int col) {
-    return _cellList[row][col].value;
+    assert(_cellList != null);
+    return _cellList![row][col].value;
   }
 
   CellStatus getCellStatus(int row, int col) {
-    return _cellList[row][col].status;
+    assert(_cellList != null);
+    return _cellList![row][col].status;
   }
 
   bool isModifiable(int row, int col) {
-    return _cellList[row][col].isModifiable;
+    assert(_cellList != null);
+    return _cellList![row][col].isModifiable;
   }
 
   BoardStatus getBoardStatus() {
@@ -52,19 +55,11 @@ class SudokuGrid extends ChangeNotifier {
     return _undoQueue.isNotEmpty;
   }
 
-  void clearBoard() {
-    for (final row in _cellList) {
-      for (final cell in row) {
-        cell.value = 0;
-      }
-    }
-    notifyListeners();
-  }
-
   void select(int row, int col, {bool update = false}) {
-    if (!update && _cellList[row][col].id == _selectedCell?.id) return;
+    if (_cellList == null) return;
+    if (!update && _cellList![row][col].id == _selectedCell?.id) return;
 
-    final cell = _cellList[row][col];
+    final cell = _cellList![row][col];
     final oldSelectedCell = _selectedCell;
 
     // Notify old cell and its unit of unselect.
@@ -129,6 +124,7 @@ class SudokuGrid extends ChangeNotifier {
   }
 
   void undo() {
+    assert(_cellList != null);
     if (_undoQueue.isEmpty) return;
 
     final lastAction = _undoQueue.removeLast();
@@ -137,7 +133,7 @@ class SudokuGrid extends ChangeNotifier {
     final value = lastAction.item3;
     final dEmptyCount = lastAction.item4;
 
-    _cellList[row][col].value = value;
+    _cellList![row][col].value = value;
     _emptyCount += dEmptyCount;
 
     _checkWinCondition();
@@ -146,9 +142,10 @@ class SudokuGrid extends ChangeNotifier {
 
   /// Based on http://norvig.com/sudoku.html
   bool solve() {
+    if (_cellList == null) return false;
     // Assign static values.
     // TODO: maybe do this in constructor of SudokuGrid?
-    for (final row in _cellList) {
+    for (final row in _cellList!) {
       for (final cell in row.where((cell) => !cell.isModifiable)) {
         if (!_assign(cell, cell.value, [])) return false;
       }
@@ -157,7 +154,7 @@ class SudokuGrid extends ChangeNotifier {
     if (!_search()) return false;
 
     // Change actual values of Sudoku grid.
-    for (final row in _cellList) {
+    for (final row in _cellList!) {
       for (final cell in row) {
         cell.value = cell.possibilities.first;
       }
@@ -222,12 +219,13 @@ class SudokuGrid extends ChangeNotifier {
   }
 
   bool _search() {
+    assert(_cellList != null);
     // Check if Sudoku already solved.
-    if (_cellList.every((row) => row.every((cell) => cell.possibilities.length == 1))) return true;
+    if (_cellList!.every((row) => row.every((cell) => cell.possibilities.length == 1))) return true;
 
     // Get cell with fewest possibilities.
     SudokuGridCell? nextCell;
-    for (final row in _cellList) {
+    for (final row in _cellList!) {
       for (final cell in row.where((cell) => cell.possibilities.length > 1)) {
         if (nextCell == null || cell.possibilities.length < nextCell.possibilities.length) nextCell = cell;
       }
@@ -249,6 +247,7 @@ class SudokuGrid extends ChangeNotifier {
   }
 
   bool _actOnUnits(SudokuGridCell cell, bool Function(SudokuGridCell cell) action, {bool onlyPeers = false}) {
+    assert(_cellList != null);
     final row = cell.row;
     final col = cell.col;
     final blockId = cell.blockId;
@@ -256,13 +255,13 @@ class SudokuGrid extends ChangeNotifier {
     // Run action on row unit.
     for (int uCol = 0; uCol < 9; ++uCol) {
       if (onlyPeers && uCol == col) continue;
-      if (!action(_cellList[row][uCol])) return false;
+      if (!action(_cellList![row][uCol])) return false;
     }
 
     // Run action on column unit.
     for (int uRow = 0; uRow < 9; ++uRow) {
       if (onlyPeers && uRow == row) continue;
-      if (!action(_cellList[uRow][col])) return false;
+      if (!action(_cellList![uRow][col])) return false;
     }
 
     // Run action on block unit.
@@ -271,13 +270,14 @@ class SudokuGrid extends ChangeNotifier {
       for (final bCol in block.cols) {
         if ((bRow == row) != (bCol == col)) continue;
         if (onlyPeers && bRow == row && bCol == col) continue;
-        if (!action(_cellList[bRow][bCol])) return false;
+        if (!action(_cellList![bRow][bCol])) return false;
       }
     }
     return true;
   }
 
   bool _checkWinCondition() {
+    assert(_cellList != null);
     if (_emptyCount != 0) {
       _status = BoardStatus.inProgress;
       return false;
@@ -286,7 +286,7 @@ class SudokuGrid extends ChangeNotifier {
     for (int index = 0; index < 9; ++index) {
       final digits = <int>{};
       // Check row unit.
-      if (!_cellList[index].every((cell) => digits.add(cell.value))) {
+      if (!_cellList![index].every((cell) => digits.add(cell.value))) {
         debugPrint("Duplicate in row: $index");
         _status = BoardStatus.hasErrors;
         return false;
@@ -295,7 +295,7 @@ class SudokuGrid extends ChangeNotifier {
       digits.clear();
       // Check column unit.
       for (int cRow = 0; cRow < 9; ++cRow) {
-        if (!digits.add(_cellList[cRow][index].value)) {
+        if (!digits.add(_cellList![cRow][index].value)) {
           debugPrint("Duplicate in column: $index");
           _status = BoardStatus.hasErrors;
           return false;
@@ -306,7 +306,7 @@ class SudokuGrid extends ChangeNotifier {
       // Check block unit.
       for (final bRow in _blockList[index].rows) {
         for (final bCol in _blockList[index].cols) {
-          if (!digits.add(_cellList[bRow][bCol].value)) {
+          if (!digits.add(_cellList![bRow][bCol].value)) {
             debugPrint("Duplicate in block: $index");
             _status = BoardStatus.hasErrors;
             return false;

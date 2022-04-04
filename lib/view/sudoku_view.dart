@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tuple/tuple.dart';
 import '../grid/sudoku_grid.dart';
-import 'camera_view.dart';
 
 class SudokuView extends StatefulWidget {
-  final List<int> sudokuGrid;
+  final Future<List<int>> valueList;
+  final void Function() openCamera;
 
-  const SudokuView({Key? key, required this.sudokuGrid}) : super(key: key);
+  const SudokuView({
+    Key? key,
+    required this.valueList,
+    required this.openCamera,
+  }) : super(key: key);
 
   @override
   State<SudokuView> createState() => _SudokuViewState();
@@ -16,15 +20,18 @@ class SudokuView extends StatefulWidget {
 /// A widget that only displays the extracted sudoku grid (not interactable).
 class _SudokuViewState extends State<SudokuView> {
   final _buttonPrimaryColor = const Color.fromARGB(255, 102, 102, 102);
-  late SudokuGrid sudokuGrid;
+  final sudokuGrid = SudokuGrid();
+  late Future<void> sudokuGridFuture;
   int? selectedId;
 
   @override
   void initState() {
     super.initState();
 
-    // Create Sudoku grid.
-    sudokuGrid = SudokuGrid(widget.sudokuGrid);
+    // Fill in Sudoku grid when extraction is finished.
+    sudokuGridFuture = widget.valueList.then(
+      (valueList) => sudokuGrid.fillIn(valueList),
+    );
   }
 
   @override
@@ -92,11 +99,7 @@ class _SudokuViewState extends State<SudokuView> {
             children: [
               ElevatedButton.icon(
                 style: buttonStyle,
-                onPressed: () => Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (context) => const CameraView(),
-                  ),
-                ),
+                onPressed: () => widget.openCamera(),
                 icon: const Icon(Icons.camera_alt),
                 label: const Text("New"),
               ),
@@ -154,23 +157,31 @@ class _SudokuViewState extends State<SudokuView> {
       child: Align(
         alignment: Alignment.topCenter,
         child: Container(
-          width: size,
-          height: size,
-          padding: EdgeInsets.all(size * 0.02),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.all(Radius.circular(10)),
-            // border: Border.all(),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black,
-                blurRadius: 15,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: SudokuGridWidget(size: size * 0.96),
-        ),
+            width: size,
+            height: size,
+            padding: EdgeInsets.all(size * 0.02),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+              // border: Border.all(),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black,
+                  blurRadius: 15,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: FutureBuilder(
+              future: sudokuGridFuture,
+              builder: (_, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  return SudokuGridWidget(size: size * 0.96);
+                } else {
+                  return const Center(child: CircularProgressIndicator());
+                }
+              },
+            )),
       ),
     );
   }

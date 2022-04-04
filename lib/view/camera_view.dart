@@ -11,7 +11,9 @@ import 'sudoku_view.dart';
 
 /// The main widget for taking pictures.
 class CameraView extends StatefulWidget {
-  const CameraView({Key? key}) : super(key: key);
+  final void Function(String imagePath, {int? roiSize, int? roiOffset}) scanImage;
+
+  const CameraView({Key? key, required this.scanImage}) : super(key: key);
 
   @override
   _CameraViewState createState() => _CameraViewState();
@@ -486,14 +488,12 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
         });
       }
 
-      // If the picture was taken, extract Sudoku and display it.
-      final sudokuFuture = SudokuScanner.extractGridfromRoi(
+      // If the picture was taken, scan its content.
+      widget.scanImage(
         image.path,
-        (_roiSize * _previewWidth).toInt(),
-        (_roiOffset * _previewHeight).toInt(),
+        roiSize: (_roiSize * _previewWidth).toInt(),
+        roiOffset: (_roiOffset * _previewHeight).toInt(),
       );
-
-      _showSudokuGrid(sudokuFuture);
     } on CameraException catch (e) {
       // TODO: error handling when taking picture fails
       debugPrint('Error in _onTakePictureButtonPressed: $e.code\nError Message: $e.message');
@@ -515,9 +515,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       final image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image != null) {
-        final resultBB = await SudokuScanner.detectGrid(image.path);
-        final sudokuFuture = SudokuScanner.extractGrid(image.path, resultBB);
-        _showSudokuGrid(sudokuFuture);
+        widget.scanImage(image.path);
       } else {
         // Back button was pressed.
         _isCameraDisabled = false;
@@ -528,20 +526,5 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       debugPrint('Error in _onGalleryButtonPressed: $e.code\nError Message: $e.message');
       rethrow;
     }
-  }
-
-  /// Present next view.
-  void _showSudokuGrid(Future<List<int>> sudokuFuture) async {
-    final sudokuGrid = await sudokuFuture;
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => SudokuView(
-          // Pass the automatically generated path to
-          // the SudokuGrid widget.
-          sudokuGrid: sudokuGrid,
-        ),
-      ),
-    );
   }
 }
