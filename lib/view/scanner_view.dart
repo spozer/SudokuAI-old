@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -21,51 +22,49 @@ class ScannerView extends StatefulWidget {
 }
 
 class _ScannerViewState extends State<ScannerView> {
-  late Future<void> boundingBoxFuture;
   late Future<ui.Image> imageFuture;
+  late Future<void> firstBuildFuture;
 
   List<Offset> points = [];
+  Size? maxPreviewSize;
+  Offset minPreviewOffset = const Offset(0, 0);
   Size? previewSize;
   Offset previewOffset = const Offset(0, 0);
+  bool gotBoundingBox = false;
 
   @override
   void initState() {
+    final firstBuildCompleter = Completer();
+    firstBuildFuture = firstBuildCompleter.future;
+
+    WidgetsBinding.instance!.addPostFrameCallback((_) {
+      // Indicate that first build was completed.
+      firstBuildCompleter.complete();
+    });
+
     imageFuture = _getUiImage(widget.imagePath);
 
-    boundingBoxFuture = SudokuScanner.detectGrid(widget.imagePath).then((boundingBox) async {
-      final image = await imageFuture;
-      final imageSize = Size(image.width.toDouble(), image.height.toDouble());
-      final screenSize = MediaQuery.of(context).size;
-
-      double screenAspectRatio = screenSize.height / screenSize.width;
-      double imageAspectRatio = imageSize.height / imageSize.width;
-      bool fitHeight = (imageAspectRatio > screenAspectRatio);
-
-      final previewWidth = fitHeight ? screenSize.height / imageAspectRatio : screenSize.width;
-      final previewHeight = fitHeight ? screenSize.height : screenSize.width * imageAspectRatio;
-
-      previewSize = Size(previewWidth, previewHeight);
-
-      // Adjust for image location.
-      previewOffset = Offset(
-        (screenSize.width - previewWidth) / 2,
-        (screenSize.height - previewHeight) / 2,
-      );
-
-      final relativePoints = boundingBox.toPoints(previewSize!);
-
-      // Absolut locations.
-      points = List.generate(
-        relativePoints.length,
-        (index) => relativePoints[index] + previewOffset,
-      );
-    });
+    SudokuScanner.detectGrid(widget.imagePath).then(_onScanComplete);
 
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Padding for preview.
+    const previewLeft = 0.0;
+    final previewTop = MediaQuery.of(context).viewPadding.top;
+
+    minPreviewOffset = Offset(previewLeft, previewTop);
+    maxPreviewSize = Size(screenWidth - 2 * previewLeft, screenHeight * 0.85);
+
+    final buttonBarSize = (screenHeight - maxPreviewSize!.height - previewTop);
+    final buttonBarOffset = buttonBarSize / 2;
+    final touchBubbleSize = screenHeight * 0.04;
+
     return WillPopScope(
       onWillPop: () async {
         widget.onBack();
@@ -74,54 +73,53 @@ class _ScannerViewState extends State<ScannerView> {
       child: Scaffold(
         body: Stack(
           children: <Widget>[
-            _getImage(),
-            _getBoundingBox(),
-            _getButtonBar(),
+            _getPreview(maxPreviewSize!, minPreviewOffset),
+            _getBoundingBox(touchBubbleSize),
+            _getButtonBar(buttonBarSize, buttonBarOffset),
           ],
         ),
       ),
     );
   }
 
-  Widget _getImage() {
-    return FutureBuilder(
-      future: imageFuture,
-      builder: (_, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
-          return RawImage(
-            image: snapshot.data as ui.Image,
-            fit: BoxFit.contain,
-            width: double.infinity,
-            height: double.infinity,
-            alignment: Alignment.center,
-          );
-        } else {
-          return const Center(
-            child: Text("Loading Picture..."),
-          );
-        }
-      },
+  Widget _getPreview(Size size, Offset offset) {
+    return Padding(
+      padding: EdgeInsets.only(top: offset.dy, left: offset.dx, right: offset.dx),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Container(
+          width: size.width,
+          height: size.height,
+          color: Colors.black,
+          child: FutureBuilder(
+            future: imageFuture,
+            builder: (_, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done) {
+                return RawImage(
+                  image: snapshot.data as ui.Image,
+                  fit: BoxFit.contain,
+                );
+              } else {
+                return const SizedBox();
+              }
+            },
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _getBoundingBox() {
-    return FutureBuilder(
-      future: boundingBoxFuture,
-      builder: (_, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
-          if (points.isEmpty) {
-            return const SizedBox();
-          }
-
-          return SizedBox(
+  Widget _getBoundingBox(double touchBubbleSize) {
+    return (gotBoundingBox)
+        ? SizedBox(
             width: double.infinity,
             height: double.infinity,
             child: Stack(
               children: <Widget>[
-                _getTouchBubble(0),
-                _getTouchBubble(1),
-                _getTouchBubble(2),
-                _getTouchBubble(3),
+                _getTouchBubble(0, touchBubbleSize),
+                _getTouchBubble(1, touchBubbleSize),
+                _getTouchBubble(2, touchBubbleSize),
+                _getTouchBubble(3, touchBubbleSize),
                 CustomPaint(
                   painter: EdgePainter(
                     points: points,
@@ -130,24 +128,19 @@ class _ScannerViewState extends State<ScannerView> {
                 ),
               ],
             ),
-          );
-        } else {
-          return const SizedBox();
-        }
-      },
-    );
+          )
+        : const SizedBox();
   }
 
-  Widget _getTouchBubble(int id) {
+  Widget _getTouchBubble(int id, double size) {
     assert(id < points.length);
 
-    double bubbleSize = 25.0;
     return Positioned(
-      top: points[id].dy - (bubbleSize / 2),
-      left: points[id].dx - (bubbleSize / 2),
+      top: points[id].dy - (size / 2),
+      left: points[id].dx - (size / 2),
       child: TouchBubble(
         id: id,
-        size: bubbleSize,
+        size: size,
         onDraggingStarted: _onDraggingStarted,
         onDrag: _onDrag,
         onDraggingStopped: _onDraggingStopped,
@@ -155,47 +148,96 @@ class _ScannerViewState extends State<ScannerView> {
     );
   }
 
-  Widget _getButtonBar() {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: ElevatedButton(
-        onPressed: () async {
-          if (points.isEmpty || previewSize == null) return;
+  Widget _getButtonBar(double size, double offset) {
+    Size buttonSize = Size(size, size * 0.6);
+    return Padding(
+      padding: EdgeInsets.only(bottom: offset - buttonSize.height / 2),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: <Widget>[
+            ElevatedButton(
+              onPressed: widget.onBack,
+              style: ElevatedButton.styleFrom(
+                fixedSize: buttonSize,
+                elevation: 5,
+                primary: const Color.fromARGB(255, 102, 102, 102),
+                shadowColor: Colors.black,
+              ),
+              child: const Icon(
+                Icons.arrow_back,
+                color: Colors.white,
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (points.isEmpty || previewSize == null) return;
 
-          final relativePoints = List.generate(
-            points.length,
-            (index) => points[index] - previewOffset,
-          );
+                final relativePoints = List.generate(
+                  points.length,
+                  (index) => points[index] - previewOffset,
+                );
 
-          final boundingBox = BoundingBox.fromPoints(relativePoints, previewSize!);
-          final valueList = SudokuScanner.extractGrid(widget.imagePath, boundingBox);
+                final boundingBox = BoundingBox.fromPoints(relativePoints, previewSize!);
+                final valueList = SudokuScanner.extractGrid(widget.imagePath, boundingBox);
 
-          widget.showSudoku(valueList);
-        },
-        style: ElevatedButton.styleFrom(
-          elevation: 5,
-          primary: const Color.fromARGB(255, 102, 102, 102),
-          shadowColor: Colors.black,
-        ),
-        child: FutureBuilder(
-          future: boundingBoxFuture,
-          builder: (_, snapshot) {
-            if (snapshot.connectionState == ConnectionState.done) {
-              return const Icon(Icons.check);
-            } else {
-              return const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              );
-            }
-          },
+                widget.showSudoku(valueList);
+              },
+              style: ElevatedButton.styleFrom(
+                fixedSize: buttonSize,
+                elevation: (gotBoundingBox) ? 5 : 0,
+                primary: (gotBoundingBox) ? const Color.fromARGB(255, 102, 102, 102) : Colors.grey[800],
+                shadowColor: Colors.black,
+              ),
+              child: (gotBoundingBox)
+                  ? Icon(
+                      Icons.check,
+                      color: Colors.white,
+                    )
+                  : CircularProgressIndicator(
+                      color: Colors.grey,
+                    ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  void _onScanComplete(BoundingBox boundingBox) async {
+    final image = await imageFuture;
+    final imageSize = Size(image.width.toDouble(), image.height.toDouble());
+
+    await firstBuildFuture;
+    double previewAspectRatio = maxPreviewSize!.height / maxPreviewSize!.width;
+    double imageAspectRatio = imageSize.height / imageSize.width;
+    bool fitHeight = (imageAspectRatio > previewAspectRatio);
+
+    final previewWidth = fitHeight ? maxPreviewSize!.height / imageAspectRatio : maxPreviewSize!.width;
+    final previewHeight = fitHeight ? maxPreviewSize!.height : maxPreviewSize!.width * imageAspectRatio;
+
+    previewSize = Size(previewWidth, previewHeight);
+
+    // Adjust for image location.
+    previewOffset = Offset(
+      minPreviewOffset.dx + (maxPreviewSize!.width - previewWidth) / 2,
+      minPreviewOffset.dy + (maxPreviewSize!.height - previewHeight) / 2,
+    );
+
+    final relativePoints = boundingBox.toPoints(previewSize!);
+
+    // Absolut locations.
+    points = List.generate(
+      relativePoints.length,
+      (index) => relativePoints[index] + previewOffset,
+    );
+
+    if (mounted) {
+      setState(() {
+        gotBoundingBox = true;
+      });
+    }
   }
 
   Offset _clampPosition(Offset position) {
@@ -206,19 +248,23 @@ class _ScannerViewState extends State<ScannerView> {
   }
 
   void _onDraggingStarted(int id, Offset newPosition) {
-    setState(() {
-      points[id] = _clampPosition(newPosition);
-    });
+    if (mounted) {
+      setState(() {
+        points[id] = _clampPosition(newPosition);
+      });
+    }
   }
 
   void _onDrag(int id, Offset newPosition) {
-    setState(() {
-      points[id] = _clampPosition(newPosition);
-    });
+    if (mounted) {
+      setState(() {
+        points[id] = _clampPosition(newPosition);
+      });
+    }
   }
 
   void _onDraggingStopped() {
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<ui.Image> _getUiImage(String imagePath) {
