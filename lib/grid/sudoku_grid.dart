@@ -231,7 +231,10 @@ class SudokuGrid extends ChangeNotifier {
       }
     }
 
-    final possibilities = Set<int>.from(nextCell!.possibilities);
+    // At least one cell has empty possibilities.
+    if (nextCell == null) return false;
+
+    final possibilities = Set<int>.from(nextCell.possibilities);
 
     // Try to assign one of the possible values.
     for (final value in possibilities) {
